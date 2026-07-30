@@ -90,7 +90,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:title", content: "travelmate" },
       {
         property: "og:description",
-        content: "5 道偏好测试匹配旅行搭子，把零散信息变成清晰行程。",
+        content: "6 个独立维度匹配旅行搭子，把真实信息整理成可确认的旅行草稿。",
       },
       { property: "og:type", content: "website" },
       { property: "og:image", content: "/og.png" },

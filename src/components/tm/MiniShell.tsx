@@ -112,13 +112,21 @@ export function PrimaryButton({
   );
 }
 
-export function Tag({ children, tone = "muted" }: { children: ReactNode; tone?: "muted" | "brand" | "accent" }) {
+export function Tag({
+  children,
+  tone = "muted",
+}: {
+  children: ReactNode;
+  tone?: "muted" | "brand" | "accent";
+}) {
   const tones = {
     muted: "bg-surface-sunk text-muted-foreground",
     brand: "bg-brand-soft text-primary-foreground",
     accent: "bg-accent-soft text-accent",
   };
   return (
-    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${tones[tone]}`}>{children}</span>
+    <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${tones[tone]}`}>
+      {children}
+    </span>
   );
 }

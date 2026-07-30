@@ -1,70 +1,92 @@
 import { useEffect, useState } from "react";
-import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
-import { COMPANIONS, QUESTIONS, matchCompanion, type AnimalKey } from "@/lib/travelmate-data";
 import { RefreshCw, Sparkles } from "lucide-react";
+import {
+  COMPANIONS,
+  PRODUCT_CAPABILITIES,
+  QUESTIONS,
+  matchCompanion,
+  type AnimalKey,
+  type MatchReason,
+} from "@/lib/travelmate-data";
+import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
 
 type Step = "welcome" | "quiz" | "loading" | "result" | "naming";
+
+export interface OnboardingResult {
+  key: AnimalKey;
+  name: string;
+  memoryEnabled: boolean;
+  reasons: MatchReason[];
+}
 
 export function Onboarding({
   onFinish,
   onSkip,
 }: {
-  onFinish: (c: { key: AnimalKey; name: string; secondary: AnimalKey; blended: boolean; memory: boolean }) => void;
+  onFinish: (result: OnboardingResult) => void;
   onSkip: () => void;
 }) {
   const [step, setStep] = useState<Step>("welcome");
-  const [idx, setIdx] = useState(0);
+  const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
-  const [nameIdx, setNameIdx] = useState(0);
+  const [nameIndex, setNameIndex] = useState(0);
   const [name, setName] = useState("");
-  const [memory, setMemory] = useState(true);
+  const [memoryEnabled, setMemoryEnabled] = useState(false);
 
   const result = answers.length === QUESTIONS.length ? matchCompanion(answers) : null;
   const companion = result ? COMPANIONS[result.primary] : null;
 
   useEffect(() => {
     if (step !== "loading") return;
-    const t = setTimeout(() => setStep("result"), 1600);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setStep("result"), 900);
+    return () => clearTimeout(timer);
   }, [step]);
 
   useEffect(() => {
-    if (companion) setName(companion.suggestedNames[nameIdx % companion.suggestedNames.length]);
-  }, [companion, nameIdx]);
+    if (companion) {
+      setName(companion.suggestedNames[nameIndex % companion.suggestedNames.length]);
+    }
+  }, [companion, nameIndex]);
 
   if (step === "welcome") {
     return (
       <MiniShell title="travelmate" showTabBar={false}>
         <div className="flex min-h-full flex-col px-6 pb-6 pt-5">
           <div className="text-center">
-            <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">travelmate</p>
+            <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">
+              travelmate
+            </p>
             <h1 className="mt-3 text-[26px] font-bold leading-snug text-foreground">
               和搭子一起
               <br />
               把旅行想好、走好
             </h1>
-            <p className="mx-auto mt-3 max-w-[16rem] text-[13px] leading-relaxed text-muted-foreground">
-              5 道小问题，约 45 秒，帮你匹配一位专属旅行搭子。
+            <p className="mx-auto mt-3 max-w-[17rem] text-[13px] leading-relaxed text-muted-foreground">
+              6 个独立维度，约 1 分钟。每个匹配结论都能追溯到你的答案。
             </p>
           </div>
           <div className="relative mx-auto mt-5 flex h-40 w-full shrink-0 items-center justify-center">
             <div className="absolute size-40 rounded-full bg-brand-soft" />
             <div className="relative grid grid-cols-3 gap-x-5 gap-y-3 text-3xl">
-              {Object.values(COMPANIONS).slice(0, 6).map((c) => (
-                <span key={c.key} className="drop-shadow-sm">{c.emoji}</span>
-              ))}
+              {Object.values(COMPANIONS)
+                .slice(0, 6)
+                .map((item) => (
+                  <span key={item.key} className="drop-shadow-sm">
+                    {item.emoji}
+                  </span>
+                ))}
             </div>
           </div>
           <div className="mt-auto space-y-2 pt-5">
-            <PrimaryButton onClick={() => setStep("quiz")}>秒匹配我的搭子</PrimaryButton>
+            <PrimaryButton onClick={() => setStep("quiz")}>开始匹配我的搭子</PrimaryButton>
             <button
               onClick={onSkip}
               className="w-full py-2 text-[13px] font-medium text-muted-foreground"
             >
               先逛逛，稍后再测
             </button>
-            <p className="text-center text-[11px] text-muted-foreground/80">
-              仅在保存搭子结果时需要微信快捷登录
+            <p className="text-center text-[11px] leading-relaxed text-muted-foreground/80">
+              保存搭子、邀请同行人或跨设备同步时才需要登录
             </p>
           </div>
         </div>
@@ -73,38 +95,40 @@ export function Onboarding({
   }
 
   if (step === "quiz") {
-    const q = QUESTIONS[idx];
+    const question = QUESTIONS[index];
     return (
       <MiniShell
-        title={`旅行偏好测试 ${idx + 1}/5`}
+        title={`旅行偏好测试 ${index + 1}/${QUESTIONS.length}`}
         showTabBar={false}
-        onBack={() => (idx === 0 ? setStep("welcome") : setIdx(idx - 1))}
+        onBack={() => (index === 0 ? setStep("welcome") : setIndex(index - 1))}
       >
-        <div className="flex h-full flex-col px-6 pb-8">
+        <div className="flex min-h-full flex-col px-6 pb-8">
           <div className="mt-1 h-1.5 w-full rounded-full bg-surface-sunk">
             <div
               className="h-1.5 rounded-full bg-primary transition-all duration-300"
-              style={{ width: `${((idx + 1) / QUESTIONS.length) * 100}%` }}
+              style={{ width: `${((index + 1) / QUESTIONS.length) * 100}%` }}
             />
           </div>
           <div className="mt-10">
-            <Tag tone="accent">{q.topic}</Tag>
-            <h2 className="mt-4 text-[22px] font-bold leading-snug text-foreground">{q.text}</h2>
+            <Tag tone="accent">{question.topic}</Tag>
+            <h2 className="mt-4 text-[22px] font-bold leading-snug text-foreground">
+              {question.text}
+            </h2>
           </div>
           <div className="mt-8 space-y-3">
-            {q.options.map((opt, i) => {
-              const selected = answers[idx] === i;
+            {question.options.map((option, optionIndex) => {
+              const selected = answers[index] === optionIndex;
               return (
                 <button
-                  key={opt.label}
+                  key={option.label}
                   onClick={() => {
                     const next = answers.slice();
-                    next[idx] = i;
+                    next[index] = optionIndex;
                     setAnswers(next);
                     setTimeout(() => {
-                      if (idx === QUESTIONS.length - 1) setStep("loading");
-                      else setIdx(idx + 1);
-                    }, 180);
+                      if (index === QUESTIONS.length - 1) setStep("loading");
+                      else setIndex(index + 1);
+                    }, 140);
                   }}
                   className={`w-full rounded-[16px] border px-4 py-4 text-left text-[15px] transition-all active:scale-[0.99] ${
                     selected
@@ -112,7 +136,7 @@ export function Onboarding({
                       : "border-border bg-card text-foreground/80"
                   }`}
                 >
-                  {opt.label}
+                  {option.label}
                 </button>
               );
             })}
@@ -133,48 +157,71 @@ export function Onboarding({
             ✨
           </div>
           <p className="text-[16px] font-semibold text-foreground">正在为你挑选搭子…</p>
-          <p className="text-[13px] text-muted-foreground">根据你的节奏、角色和旅行动机</p>
+          <p className="text-[13px] text-muted-foreground">
+            逐项核对计划、节奏、社交、风险、消费和动机
+          </p>
         </div>
       </MiniShell>
     );
   }
 
   if (step === "result" && companion && result) {
-    const second = COMPANIONS[result.secondary];
     return (
       <MiniShell title="匹配结果" showTabBar={false}>
-        <div className="flex h-full flex-col px-6 pb-8">
+        <div className="px-6 pb-8">
           <div className="mt-4 text-center">
-            <div className="mx-auto flex size-32 items-center justify-center rounded-full bg-brand-soft text-[64px]">
+            <div className="mx-auto flex size-28 items-center justify-center rounded-full bg-brand-soft text-[58px]">
               {companion.emoji}
             </div>
             <h2 className="mt-4 text-[24px] font-bold text-foreground">{companion.title}</h2>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              {result.blended ? "复合倾向 · " : ""}也很会{second.title.replace("者", "")}
-            </p>
+            <p className="mt-1 text-[13px] text-muted-foreground">{companion.tendency}</p>
           </div>
-          <Card className="mt-6">
-            <p className="text-[13px] leading-relaxed text-foreground/80">
-              你喜欢{companion.tendency}。{companion.behavior}
+          <Card className="mt-5">
+            <p className="text-[12px] font-semibold text-foreground">搭子人格</p>
+            <p className="mt-2 text-[12px] leading-relaxed text-foreground/80">
+              {companion.behavior}
             </p>
           </Card>
           <Card className="mt-3">
-            <p className="text-[12px] font-semibold text-foreground">在 travelmate 里，我会这样帮你</p>
-            <ul className="mt-2 space-y-1.5 text-[12px] text-muted-foreground">
-              <li>· {companion.behavior}</li>
-              <li>· 记住你的节奏偏好，下次直接套用</li>
-              <li>· 出发前用一句话提醒你还差什么</li>
-            </ul>
-            <p className="mt-3 text-[11px] text-muted-foreground/70">
-              评分版本 {result.scoringVersion} · 结果可随时重测或删除
-            </p>
+            <p className="text-[12px] font-semibold text-foreground">为什么匹配到它</p>
+            <div className="mt-3 space-y-3">
+              {result.reasons.map((reason) => (
+                <div
+                  key={reason.dimension}
+                  className="border-b border-border pb-3 last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Tag>{reason.dimensionLabel}</Tag>
+                    <span className="text-right text-[10px] text-muted-foreground">
+                      {reason.answer}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-foreground/75">
+                    {reason.conclusion}
+                  </p>
+                </div>
+              ))}
+            </div>
           </Card>
-          <div className="mt-auto space-y-2 pt-6">
+          <Card className="mt-3">
+            <p className="text-[12px] font-semibold text-foreground">基础产品能力</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              以下能力对所有用户一致，与匹配到哪种动物无关。
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRODUCT_CAPABILITIES.map((capability) => (
+                <Tag key={capability} tone="brand">
+                  {capability}
+                </Tag>
+              ))}
+            </div>
+          </Card>
+          <div className="space-y-2 pt-6">
             <PrimaryButton onClick={() => setStep("naming")}>给它取个名字</PrimaryButton>
             <button
               onClick={() => {
                 setAnswers([]);
-                setIdx(0);
+                setIndex(0);
                 setStep("quiz");
               }}
               className="w-full py-2 text-[13px] text-muted-foreground"
@@ -190,23 +237,25 @@ export function Onboarding({
   if (companion && result) {
     return (
       <MiniShell title="搭子命名" showTabBar={false} onBack={() => setStep("result")}>
-        <div className="flex h-full flex-col px-6 pb-8">
+        <div className="flex min-h-full flex-col px-6 pb-8">
           <div className="mt-6 text-center">
             <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-brand-soft text-5xl">
               {companion.emoji}
             </div>
-            <h2 className="mt-4 text-[20px] font-bold text-foreground">给你的{companion.animal}搭子取个名字</h2>
+            <h2 className="mt-4 text-[20px] font-bold text-foreground">
+              给你的{companion.animal}搭子取个名字
+            </h2>
           </div>
           <div className="mt-6 flex items-center gap-2 rounded-[16px] border border-border bg-card px-4 py-3">
             <input
               value={name}
               maxLength={8}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(event) => setName(event.target.value)}
               className="flex-1 bg-transparent text-[16px] font-semibold text-foreground outline-none"
               placeholder="最多 8 个字"
             />
             <button
-              onClick={() => setNameIdx(nameIdx + 1)}
+              onClick={() => setNameIndex(nameIndex + 1)}
               className="flex items-center gap-1 text-[12px] text-muted-foreground"
             >
               <RefreshCw className="size-3.5" /> 换一个
@@ -216,12 +265,12 @@ export function Onboarding({
             <label className="flex items-start gap-3">
               <input
                 type="checkbox"
-                checked={memory}
-                onChange={(e) => setMemory(e.target.checked)}
+                checked={memoryEnabled}
+                onChange={(event) => setMemoryEnabled(event.target.checked)}
                 className="mt-1 size-4 accent-[var(--accent)]"
               />
               <span className="text-[12px] leading-relaxed text-muted-foreground">
-                允许搭子记住我的旅行偏好（节奏、住宿、饮食），用于行程建议。可在「搭子记忆」中随时关闭或删除。
+                允许搭子保存本次偏好测试中我明确选择的答案。每条记忆都会标注来源；默认关闭，可随时停用或删除。
               </span>
             </label>
           </Card>
@@ -232,16 +281,18 @@ export function Onboarding({
                 onFinish({
                   key: companion.key,
                   name: name.trim(),
-                  secondary: result.secondary,
-                  blended: result.blended,
-                  memory,
+                  memoryEnabled,
+                  reasons: result.reasons,
                 })
               }
             >
               <span className="inline-flex items-center gap-1.5">
-                <Sparkles className="size-4" /> 完成，开始旅行
+                <Sparkles className="size-4" /> 保存搭子并继续
               </span>
             </PrimaryButton>
+            <p className="mt-2 text-center text-[11px] text-muted-foreground">
+              下一步将说明登录原因和数据用途
+            </p>
           </div>
         </div>
       </MiniShell>

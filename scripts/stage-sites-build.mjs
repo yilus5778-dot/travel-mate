@@ -27,9 +27,7 @@ if (clientStyles.length !== 1) {
 
 const clientAssetPath = `/assets/${clientScripts[0]}`;
 const clientStylePath = `/assets/${clientStyles[0]}`;
-const clientScript = (
-  await readFile(join(output, "public", "assets", clientScripts[0]), "utf8")
-)
+const clientScript = (await readFile(join(output, "public", "assets", clientScripts[0]), "utf8"))
   .replaceAll(
     "import.meta.resolve?import.meta.resolve(e):new URL(e,import.meta.url).href",
     "new URL(e,document.baseURI).href",
@@ -109,7 +107,4 @@ await writeFile(join(dist, "server", "index.js"), sitesEntry);
 const wranglerConfigPath = join(dist, "server", "wrangler.json");
 const wranglerConfig = JSON.parse(await readFile(wranglerConfigPath, "utf8"));
 wranglerConfig.main = "index.js";
-await writeFile(
-  wranglerConfigPath,
-  `${JSON.stringify(wranglerConfig, null, 2)}\n`,
-);
+await writeFile(wranglerConfigPath, `${JSON.stringify(wranglerConfig, null, 2)}\n`);
