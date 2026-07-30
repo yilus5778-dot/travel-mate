@@ -45,11 +45,62 @@ export function TripsTab({
   onTabChange: (t: TabKey) => void;
 }) {
   const [view, setView] = useState<"home" | "trip" | "create">("home");
+  const [hasTrip, setHasTrip] = useState(false);
   const [tripTab, setTripTab] = useState<"itinerary" | "resources" | "records">("itinerary");
   const c = companion.key ? COMPANIONS[companion.key] : null;
 
   if (view === "create") {
-    return <CreateTrip onCancel={() => setView("home")} onCreated={() => setView("trip")} />;
+    return (
+      <CreateTrip
+        onCancel={() => setView("home")}
+        onCreated={() => {
+          setHasTrip(true);
+          setView("trip");
+        }}
+      />
+    );
+  }
+
+  if (view === "home" && !hasTrip) {
+    return (
+      <MiniShell title="旅程" tab={tab} onTabChange={onTabChange}>
+        <div className="flex min-h-full flex-col px-5 pb-8 pt-4">
+          <div className="flex items-start gap-3">
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-2xl">
+              {c?.emoji ?? "🧳"}
+            </div>
+            <Card className="flex-1 !p-3">
+              <p className="text-[13px] leading-relaxed text-foreground/85">
+                {c
+                  ? `${companion.name}：我们从一次新旅行开始吧，我会陪你把想法一步步变成行程。`
+                  : "先创建一次新旅行，之后再慢慢补充同行人、攻略和订单。"}
+              </p>
+            </Card>
+          </div>
+
+          <div className="mx-auto mt-12 max-w-[17rem] text-center">
+            <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-brand-soft text-5xl">
+              🧳
+            </div>
+            <h2 className="mt-5 text-[21px] font-bold text-foreground">还没有旅行</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
+              建立一个旅行空间，我会帮你把零散想法整理成可执行的同行计划。
+            </p>
+          </div>
+
+          <div className="mt-auto pt-8">
+            <PrimaryButton onClick={() => setView("create")}>
+              <span className="inline-flex items-center gap-1.5">
+                <Plus className="size-4" /> 创建我的第一次旅行
+              </span>
+            </PrimaryButton>
+            <p className="mt-3 text-center text-[11px] text-muted-foreground">
+              可以从一句话开始，也可以导入已有攻略或订单
+            </p>
+          </div>
+        </div>
+      </MiniShell>
+    );
   }
 
   if (view === "home") {
