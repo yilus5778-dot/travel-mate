@@ -16,6 +16,7 @@ import {
 } from "@/lib/app-model";
 
 const STORAGE_KEY = "travelmate-state-v2";
+const EXPERIENCE_MODE = true;
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -44,6 +45,13 @@ function Index() {
   const [pendingCompanion, setPendingCompanion] = useState<OnboardingResult | null>(null);
 
   useEffect(() => {
+    if (EXPERIENCE_MODE) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      setState(EMPTY_STATE);
+      setHydrated(true);
+      return;
+    }
+
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -63,7 +71,7 @@ function Index() {
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || EXPERIENCE_MODE) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
 
@@ -142,7 +150,7 @@ function Index() {
         <div className="flex size-16 animate-pulse items-center justify-center rounded-full bg-brand-soft text-2xl">
           🧳
         </div>
-        <p className="mt-4 text-[13px] text-muted-foreground">正在恢复你的 travelmate 状态…</p>
+        <p className="mt-4 text-[13px] text-muted-foreground">正在开始一段全新体验…</p>
       </div>
     </MiniShell>
   ) : !state.onboardingComplete ? (
@@ -217,7 +225,7 @@ function Index() {
         <header className="prototype-caption text-center">
           <h1 className="text-[20px] font-bold text-foreground">travelmate</h1>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            可靠、可解释、不编造的微信小程序产品原型
+            全新体验模式 · 每次打开都从欢迎页开始
           </p>
         </header>
         <div className="relative">
