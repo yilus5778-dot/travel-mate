@@ -14,12 +14,19 @@ const clientAssets = await readdir(join(output, "public", "assets"));
 const clientScripts = clientAssets.filter(
   (name) => name.startsWith("index-") && name.endsWith(".js"),
 );
+const clientStyles = clientAssets.filter(
+  (name) => name.startsWith("index-") && name.endsWith(".css"),
+);
 
 if (clientScripts.length !== 1) {
   throw new Error(`Expected one client script, found ${clientScripts.length}`);
 }
+if (clientStyles.length !== 1) {
+  throw new Error(`Expected one client stylesheet, found ${clientStyles.length}`);
+}
 
 const clientAssetPath = `/assets/${clientScripts[0]}`;
+const clientStylePath = `/assets/${clientStyles[0]}`;
 const clientScript = (
   await readFile(join(output, "public", "assets", clientScripts[0]), "utf8")
 )
@@ -32,14 +39,20 @@ const clientScript = (
 if (clientScript.includes("import.meta")) {
   throw new Error("Client bundle still contains import.meta and cannot be inlined");
 }
+const clientStyle = (
+  await readFile(join(output, "public", "assets", clientStyles[0]), "utf8")
+).replaceAll("</style", "<\\/style");
 const preloadTag = `<link rel="modulepreload" href="${clientAssetPath}"/>`;
 const externalScriptTag = `<script type="module" async="" src="${clientAssetPath}"></script>`;
+const externalStyleTag = `<link rel="stylesheet" href="${clientStylePath}"/>`;
 
 const sitesEntry = `import worker from "./index.mjs";
 
 const CLIENT_SCRIPT = ${JSON.stringify(clientScript)};
+const CLIENT_STYLE = ${JSON.stringify(clientStyle)};
 const PRELOAD_TAG = ${JSON.stringify(preloadTag)};
 const EXTERNAL_SCRIPT_TAG = ${JSON.stringify(externalScriptTag)};
+const EXTERNAL_STYLE_TAG = ${JSON.stringify(externalStyleTag)};
 
 export default {
   ...worker,
@@ -50,15 +63,35 @@ export default {
 
     const baseHtml = (await response.text())
       .replace(PRELOAD_TAG, "")
-      .replace(EXTERNAL_SCRIPT_TAG, "");
-    const bodyCloseIndex = baseHtml.lastIndexOf("</body>");
+      .replace(EXTERNAL_SCRIPT_TAG, "")
+      .replace(EXTERNAL_STYLE_TAG, "")
+      .replace(
+        /<link\\b(?=[^>]*\\brel="modulepreload")(?=[^>]*\\bhref="\\/assets\\/[^"]+\\.js")[^>]*\\/?>/g,
+        "",
+      )
+      .replace(
+        /<script\\b(?=[^>]*\\btype="module")(?=[^>]*\\bsrc="\\/assets\\/[^"]+\\.js")[^>]*><\\/script>/g,
+        "",
+      )
+      .replace(
+        /<link\\b(?=[^>]*\\brel="stylesheet")(?=[^>]*\\bhref="\\/assets\\/[^"]+\\.css")[^>]*\\/?>/g,
+        "",
+      )
+      .replaceAll("TravelMate · 捣鼓旅行", "travelmate")
+      .replaceAll("TravelMate 捣鼓旅行", "travelmate")
+      .replaceAll("TravelMate", "travelmate")
+      .replaceAll("捣鼓旅行", "travelmate");
+    const styledHtml = baseHtml.includes("<style")
+      ? baseHtml
+      : baseHtml.replace("</head>", \`<style>\${CLIENT_STYLE}</style></head>\`);
+    const bodyCloseIndex = styledHtml.lastIndexOf("</body>");
     if (bodyCloseIndex === -1) return response;
 
     const inlineClient = \`<script>\${CLIENT_SCRIPT}</script>\`;
     const html =
-      baseHtml.slice(0, bodyCloseIndex) +
+      styledHtml.slice(0, bodyCloseIndex) +
       inlineClient +
-      baseHtml.slice(bodyCloseIndex);
+      styledHtml.slice(bodyCloseIndex);
     const headers = new Headers(response.headers);
     headers.delete("content-length");
 
@@ -72,3 +105,11 @@ export default {
 `;
 
 await writeFile(join(dist, "server", "index.js"), sitesEntry);
+
+const wranglerConfigPath = join(dist, "server", "wrangler.json");
+const wranglerConfig = JSON.parse(await readFile(wranglerConfigPath, "utf8"));
+wranglerConfig.main = "index.js";
+await writeFile(
+  wranglerConfigPath,
+  `${JSON.stringify(wranglerConfig, null, 2)}\n`,
+);
