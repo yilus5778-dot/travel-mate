@@ -1,107 +1,78 @@
 import { useRef, useState } from "react";
-import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
-import {
-  createTravelDraft,
-  extractTravelFacts,
-  isMeaningfulIdea,
-  type SourceItem,
-  type TravelItem,
-} from "@/lib/app-model";
 import {
   AlertCircle,
+  CalendarDays,
   Check,
+  Clock3,
+  FileSearch,
   ImageUp,
-  Lightbulb,
   Link2,
   LoaderCircle,
-  RotateCcw,
+  MapPin,
+  MessageCircleQuestion,
+  Route,
+  Sparkles,
   Trash2,
   Users,
+  Wallet,
 } from "lucide-react";
+import {
+  buildSuggestedItinerary,
+  createTravelDraft,
+  extractTravelIntent,
+  getDestinationCandidates,
+  isMeaningfulIdea,
+  organizePastedItinerary,
+  type ItineraryItem,
+  type PlanningMode,
+  type SourceItem,
+  type TravelDateStatus,
+  type TravelItem,
+} from "@/lib/app-model";
+import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
 
-type PathKey = "material" | "idea";
-type Step = "path" | "input" | "processing" | "confirm" | "done";
-
-const PATHS = [
-  {
-    key: "material" as const,
-    icon: ImageUp,
-    title: "已有图片或网页链接",
-    desc: "上传图片或粘贴链接 → 自动识别 → 逐项确认",
-  },
-  {
-    key: "idea" as const,
-    icon: Lightbulb,
-    title: "只是先有一个想法",
-    desc: "输入你的想法 → 提取已有信息 → 确认草稿",
-  },
-];
+type Step = "input" | "analyzing" | "questions" | "preview";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function pendingLabel(value: string | number | null) {
+  return value === null || value === "" ? "待确认" : String(value);
+}
 
 export function CreateTrip({
   onCancel,
   onCreated,
-  onRequireLogin,
 }: {
   onCancel: () => void;
   onCreated: (travel: TravelItem) => void;
-  onRequireLogin: (reason: string) => void;
 }) {
-  const [step, setStep] = useState<Step>("path");
-  const [path, setPath] = useState<PathKey | null>(null);
-  const [idea, setIdea] = useState("");
-  const [ideaTouched, setIdeaTouched] = useState(false);
+  const [step, setStep] = useState<Step>("input");
+  const [inputText, setInputText] = useState("");
+  const [inputTouched, setInputTouched] = useState(false);
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState("");
-  const [processingLabel, setProcessingLabel] = useState("");
+  const [analysisLabel, setAnalysisLabel] = useState("");
+  const [planningMode, setPlanningMode] = useState<PlanningMode>("plan");
+  const [departureCity, setDepartureCity] = useState("");
   const [destination, setDestination] = useState("");
-  const [dateStatus, setDateStatus] = useState<"undecided" | "confirmed">("undecided");
+  const [destinationPreference, setDestinationPreference] = useState("");
+  const [destinationCandidates, setDestinationCandidates] = useState<string[]>([]);
+  const [dateStatus, setDateStatus] = useState<TravelDateStatus>("undecided");
   const [dateText, setDateText] = useState("");
+  const [durationDays, setDurationDays] = useState("");
   const [peopleCount, setPeopleCount] = useState("");
   const [budget, setBudget] = useState("");
-  const [draft, setDraft] = useState<TravelItem | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [aiSummary, setAiSummary] = useState("");
+  const [itinerary, setItinerary] = useState<ItineraryItem[]>([]);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
-  const meaningfulIdea = isMeaningfulIdea(idea);
+  const meaningfulText = isMeaningfulIdea(inputText);
   const recognizedSources = sources.filter((source) => source.status === "recognized");
   const recognizingSources = sources.filter((source) =>
     ["selected", "uploading", "recognizing"].includes(source.status),
   );
-
-  const back = () => {
-    if (step === "path") return onCancel();
-    if (step === "input") return setStep("path");
-    if (step === "confirm") return setStep("input");
-    if (step === "done") return setStep("confirm");
-  };
-
-  const prepareConfirmation = (evidence: string) => {
-    const extracted = extractTravelFacts(evidence);
-    setDestination(extracted.destination ?? "");
-    setPeopleCount(extracted.peopleCount ? String(extracted.peopleCount) : "");
-    if (extracted.dateText) {
-      setDateStatus("confirmed");
-      setDateText(extracted.dateText);
-    } else {
-      setDateStatus("undecided");
-      setDateText("");
-    }
-    setStep("confirm");
-  };
-
-  const processInput = async () => {
-    setIdeaTouched(true);
-    if (!meaningfulIdea) return;
-
-    setStep("processing");
-    setProcessingLabel("正在读取你的想法…");
-    await wait(500);
-    setProcessingLabel("正在提取明确存在的信息…");
-    await wait(800);
-    prepareConfirmation(idea);
-  };
+  const hasInput = meaningfulText || recognizedSources.length > 0;
 
   const recognizeSources = async (ids: string[]) => {
     setSources((current) =>
@@ -111,7 +82,7 @@ export function CreateTrip({
           : source,
       ),
     );
-    await wait(450);
+    await wait(350);
     setSources((current) =>
       current.map((source) =>
         ids.includes(source.id) && source.status !== "failed"
@@ -145,196 +116,198 @@ export function CreateTrip({
       setLinkError("");
       void recognizeSources([source.id]);
     } catch {
-      setLinkError("请输入完整的 http 或 https 链接");
+      setLinkError("请输入完整的 http 或 https 网页链接");
     }
   };
 
+  const analyzeInput = async () => {
+    setInputTouched(true);
+    if (!hasInput || recognizingSources.length) return;
+
+    setStep("analyzing");
+    setAnalysisLabel("正在判断你的需求…");
+    await wait(500);
+    setAnalysisLabel("正在区分现成行程与规划想法…");
+    await wait(650);
+
+    const intent = extractTravelIntent(inputText);
+    const mode: PlanningMode =
+      intent.looksLikeItinerary || (recognizedSources.length > 0 && !meaningfulText)
+        ? "organize"
+        : "plan";
+    const candidates = intent.destination
+      ? [intent.destination]
+      : getDestinationCandidates(intent.destinationPreference);
+
+    setPlanningMode(mode);
+    setDestination(intent.destination ?? candidates[0] ?? "");
+    setDestinationPreference(intent.destinationPreference ?? "");
+    setDestinationCandidates(candidates);
+    setDateStatus(intent.dateStatus);
+    setDateText(intent.dateText ?? "");
+    setDurationDays(intent.durationDays ? String(intent.durationDays) : "");
+    setPeopleCount(intent.peopleCount ? String(intent.peopleCount) : "");
+
+    if (mode === "organize") {
+      const organized = organizePastedItinerary(inputText);
+      setItinerary(organized);
+      setAiSummary(
+        organized.length
+          ? `我识别到这是一份现成行程，已按顺序整理出 ${organized.length} 项内容。原文之外的信息不会自动补写。`
+          : "我识别到你正在导入现成资料。图片和链接已完成识别，未确认的内容不会直接写入行程。",
+      );
+      setStep("preview");
+      return;
+    }
+
+    setStep("questions");
+  };
+
+  const generatePlan = () => {
+    const selectedDestination = destination.trim() || null;
+    const days = durationDays ? Number(durationDays) : 3;
+    const generated = buildSuggestedItinerary(selectedDestination, days);
+    setItinerary(generated);
+    setAiSummary(
+      `根据“${destinationPreference || selectedDestination || "目的地待定"}”、${
+        dateText || "时间待定"
+      }和 ${days} 天，我先生成一版可编辑方案。地点与安排均为 AI 建议，不会冒充你已确认的信息。`,
+    );
+    setStep("preview");
+  };
+
   const createDraft = () => {
-    if (dateStatus === "confirmed" && !dateText.trim()) return;
-    const nextDraft = createTravelDraft({
-      idea: path === "idea" ? idea : recognizedSources.map((source) => source.name).join(" "),
-      destinationOverride: destination,
+    const travel = createTravelDraft({
+      inputText,
+      departureCity,
+      destination,
+      destinationPreference,
+      destinationCandidates,
       dateStatus,
       dateText,
+      durationDays: durationDays ? Number(durationDays) : null,
       peopleCount: peopleCount ? Number(peopleCount) : null,
       budget: budget ? Number(budget) : null,
-      sourceMode: path ?? "idea",
+      planningMode,
+      aiPlanStatus: planningMode === "plan" ? "generated" : "organized",
+      aiSummary,
       sources: recognizedSources,
+      itinerary,
     });
-    setDraft(nextDraft);
-    setStep("done");
+    onCreated(travel);
+  };
+
+  const back = () => {
+    if (step === "input") return onCancel();
+    if (step === "analyzing") return;
+    if (step === "questions") return setStep("input");
+    if (step === "preview") return setStep(planningMode === "plan" ? "questions" : "input");
   };
 
   return (
     <MiniShell title="创建新旅行" onBack={back} showTabBar={false}>
       <div className="space-y-4 px-5 pb-8 pt-2">
-        {step === "path" && (
+        {step === "input" && (
           <>
             <div>
-              <h2 className="text-[19px] font-bold text-foreground">你现在有哪些信息？</h2>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                只使用你提供的内容，缺少的信息会保留为待确定
+              <Tag tone="accent">统一多模态输入</Tag>
+              <h2 className="mt-3 text-[20px] font-bold text-foreground">把你知道的都发给我</h2>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
+                想法、完整行程、图片、订单、攻略和网页链接都可以混在一起。
               </p>
             </div>
-            {PATHS.map(({ key, icon: Icon, title, desc }) => (
-              <button
-                key={key}
-                onClick={() => {
-                  setPath(key);
-                  setStep("input");
-                }}
-                className="w-full rounded-[20px] bg-card p-4 text-left shadow-[var(--shadow-card)] transition-transform active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-[14px] bg-brand-soft">
-                    <Icon className="size-5 text-foreground/75" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-[15px] font-semibold text-foreground">{title}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">{desc}</p>
-                  </div>
-                  <span className="text-muted-foreground">›</span>
-                </div>
-              </button>
-            ))}
-          </>
-        )}
 
-        {step === "input" && path === "idea" && (
-          <>
-            <Card className="space-y-3">
-              <p className="text-[15px] font-semibold text-foreground">用一句话说说你的真实想法</p>
+            <Card>
               <textarea
-                value={idea}
-                onBlur={() => setIdeaTouched(true)}
-                onChange={(event) => {
-                  setIdea(event.target.value);
-                  if (ideaTouched) setIdeaTouched(true);
-                }}
-                rows={5}
-                placeholder="例如：秋天和三个朋友去海边走走，日期还没定"
-                className="w-full resize-none rounded-[14px] bg-surface-sunk p-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+                value={inputText}
+                onBlur={() => setInputTouched(true)}
+                onChange={(event) => setInputText(event.target.value)}
+                rows={6}
+                placeholder={"例如：国庆想去海边玩三天\n也可以直接粘贴 D1、D2 的完整行程"}
+                className="w-full resize-none rounded-[14px] bg-surface-sunk p-3 text-[13px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground"
               />
-              {ideaTouched && !meaningfulIdea ? (
-                <p className="flex items-start gap-1.5 text-[11px] text-destructive">
+              {inputTouched && inputText.trim() && !meaningfulText && (
+                <p className="mt-2 flex items-start gap-1.5 text-[11px] text-destructive">
                   <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-                  请补充有意义的旅行想法，例如目的地、时间、同行人或想体验的内容。
-                </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground">
-                  不确定的信息可以不写，系统不会自行补全。
+                  这段内容还不足以理解旅行需求，可以补充想去哪里、玩多久或已有安排。
                 </p>
               )}
-            </Card>
-            <PrimaryButton disabled={!meaningfulIdea} onClick={processInput}>
-              提取已有信息
-            </PrimaryButton>
-            {!meaningfulIdea && (
-              <p className="-mt-2 text-center text-[11px] text-muted-foreground">
-                输入内容过短或只有数字时无法继续
-              </p>
-            )}
-          </>
-        )}
-
-        {step === "input" && path === "material" && (
-          <>
-            <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[15px] font-semibold text-foreground">导入图片或网页链接</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    支持相册图片和网页，添加后自动识别
-                  </p>
-                </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-[10px] bg-brand-soft px-3 py-2 text-[12px] font-medium text-foreground"
+                  onClick={() => imageInputRef.current?.click()}
+                  className="flex items-center justify-center gap-1.5 rounded-[12px] bg-brand-soft py-2.5 text-[12px] font-medium text-foreground"
                 >
-                  上传图片
+                  <ImageUp className="size-4" /> 上传多张图片
                 </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => {
-                    const next = Array.from(event.target.files ?? []).map((file) => {
-                      const supported = file.type.startsWith("image/");
-                      return {
-                        id: `image-${Date.now()}-${file.name}`,
-                        kind: "image" as const,
-                        name: file.name,
-                        status: supported ? ("selected" as const) : ("failed" as const),
-                        error: supported ? undefined : "请选择图片格式",
-                      };
-                    });
-                    setSources((current) => [...current, ...next]);
-                    void recognizeSources(
-                      next
-                        .filter((source) => source.status !== "failed")
-                        .map((source) => source.id),
-                    );
-                    event.target.value = "";
-                  }}
-                />
-              </div>
-
-              {sources.length === 0 ? (
-                <div className="mt-4 rounded-[14px] border border-dashed border-border bg-surface-sunk px-4 py-6 text-center">
-                  <ImageUp className="mx-auto size-5 text-muted-foreground" />
-                  <p className="mt-2 text-[12px] font-medium text-foreground">
-                    尚未上传图片或添加链接
-                  </p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    支持多张图片和多个网页链接
-                  </p>
+                <div className="flex items-center justify-center gap-1.5 rounded-[12px] bg-surface-sunk py-2.5 text-[11px] text-muted-foreground">
+                  <FileSearch className="size-4" /> 可识别订单与攻略
                 </div>
-              ) : (
-                <div className="mt-4 space-y-2">
+              </div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  const next: SourceItem[] = Array.from(event.target.files ?? []).map(
+                    (file, index) => ({
+                      id: `image-${Date.now()}-${index}-${file.name}`,
+                      kind: "image",
+                      name: file.name,
+                      status: file.type.startsWith("image/") ? "selected" : "failed",
+                      error: file.type.startsWith("image/") ? undefined : "请选择图片格式",
+                    }),
+                  );
+                  setSources((current) => [...current, ...next]);
+                  void recognizeSources(
+                    next.filter((source) => source.status !== "failed").map((source) => source.id),
+                  );
+                  event.target.value = "";
+                }}
+              />
+
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={link}
+                  onChange={(event) => setLink(event.target.value)}
+                  placeholder="粘贴网页链接"
+                  className="min-w-0 flex-1 rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
+                />
+                <button
+                  onClick={addLink}
+                  className="flex shrink-0 items-center gap-1 rounded-[12px] bg-brand-soft px-3 text-[12px] font-medium"
+                >
+                  <Link2 className="size-3.5" /> 添加
+                </button>
+              </div>
+              {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
+
+              {sources.length > 0 && (
+                <div className="mt-3 space-y-2 border-t border-border pt-3">
                   {sources.map((source) => (
                     <div
                       key={source.id}
-                      className="flex items-start gap-2 rounded-[12px] bg-surface-sunk px-3 py-2"
+                      className="flex items-center gap-2 rounded-[12px] bg-surface-sunk px-3 py-2"
                     >
-                      {source.status === "failed" ? (
-                        <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                      ) : source.status === "recognized" ? (
-                        <Check className="mt-0.5 size-4 shrink-0 text-accent" />
+                      {source.status === "recognized" ? (
+                        <Check className="size-4 shrink-0 text-accent" />
+                      ) : source.status === "failed" ? (
+                        <AlertCircle className="size-4 shrink-0 text-destructive" />
                       ) : (
-                        <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-accent" />
+                        <LoaderCircle className="size-4 shrink-0 animate-spin text-accent" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-medium text-foreground">
-                          {source.name}
-                        </p>
+                        <p className="truncate text-[11px] text-foreground">{source.name}</p>
                         <p className="text-[10px] text-muted-foreground">
                           {source.error ??
                             (source.status === "recognized"
                               ? "自动识别完成"
                               : source.status === "recognizing"
                                 ? "正在识别内容…"
-                                : "正在上传图片或读取链接…")}
+                                : "正在上传或读取…")}
                         </p>
                       </div>
-                      {source.status === "failed" && (
-                        <button
-                          aria-label={`重新识别 ${source.name}`}
-                          onClick={() => {
-                            setSources((current) =>
-                              current.map((item) =>
-                                item.id === source.id
-                                  ? { ...item, status: "selected", error: undefined }
-                                  : item,
-                              ),
-                            );
-                            void recognizeSources([source.id]);
-                          }}
-                        >
-                          <RotateCcw className="size-4 text-muted-foreground" />
-                        </button>
-                      )}
                       <button
                         aria-label={`删除 ${source.name}`}
                         onClick={() =>
@@ -347,194 +320,220 @@ export function CreateTrip({
                   ))}
                 </div>
               )}
-
-              <div className="mt-4 flex gap-2">
-                <input
-                  value={link}
-                  onChange={(event) => setLink(event.target.value)}
-                  placeholder="粘贴攻略、订单或地图网页链接"
-                  className="min-w-0 flex-1 rounded-[12px] bg-surface-sunk px-3 py-2 text-[12px] outline-none"
-                />
-                <button
-                  onClick={addLink}
-                  className="flex items-center gap-1 rounded-[12px] bg-brand-soft px-3 text-[12px] font-medium"
-                >
-                  <Link2 className="size-3.5" /> 添加并识别
-                </button>
-              </div>
-              {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
             </Card>
 
             <PrimaryButton
-              disabled={recognizedSources.length === 0 || recognizingSources.length > 0}
-              onClick={() =>
-                prepareConfirmation(recognizedSources.map((source) => source.name).join(" "))
-              }
+              disabled={!hasInput || recognizingSources.length > 0}
+              onClick={analyzeInput}
             >
-              查看识别结果
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="size-4" /> 让 AI 理解并规划
+              </span>
             </PrimaryButton>
-            {sources.length === 0 && (
+            {!hasInput && (
               <p className="-mt-2 text-center text-[11px] text-muted-foreground">
-                请先上传图片或添加有效网页链接
+                输入一段有效文字，或先上传图片、添加链接
               </p>
             )}
             {recognizingSources.length > 0 && (
               <p className="-mt-2 text-center text-[11px] text-muted-foreground">
-                正在自动识别，请稍候
+                正在自动识别图片和链接，请稍候
               </p>
             )}
           </>
         )}
 
-        {step === "processing" && (
-          <div className="flex min-h-[28rem] flex-col items-center justify-center text-center">
+        {step === "analyzing" && (
+          <div className="flex min-h-[30rem] flex-col items-center justify-center px-5 text-center">
             <div className="flex size-20 items-center justify-center rounded-full bg-brand-soft">
-              <LoaderCircle className="size-8 animate-spin text-foreground/70" />
+              <Sparkles className="size-8 animate-pulse text-foreground/75" />
             </div>
-            <p className="mt-5 text-[15px] font-semibold text-foreground">{processingLabel}</p>
-            <p className="mt-2 max-w-[16rem] text-[11px] leading-relaxed text-muted-foreground">
-              只提取资料中明确存在的信息，低置信度内容不会写入旅行。
+            <p className="mt-5 text-[15px] font-semibold text-foreground">{analysisLabel}</p>
+            <p className="mt-2 max-w-[17rem] text-[11px] leading-relaxed text-muted-foreground">
+              现成行程会被结构化；模糊想法会进入规划和少量追问。
             </p>
           </div>
         )}
 
-        {step === "confirm" && (
+        {step === "questions" && (
           <>
-            <div>
-              <h2 className="text-[19px] font-bold text-foreground">确认旅行草稿</h2>
-              <p className="mt-1 text-[12px] text-muted-foreground">
-                未填写的内容会明确保留为“待确定”
+            <Card>
+              <div className="flex items-center justify-between">
+                <Tag tone="accent">AI 判断：从零规划</Tag>
+                <MessageCircleQuestion className="size-4 text-muted-foreground" />
+              </div>
+              <p className="mt-3 text-[13px] leading-relaxed text-foreground/80">
+                {destinationPreference
+                  ? `“${destinationPreference}”是目的地偏好，不是具体城市。`
+                  : destination
+                    ? `已识别具体目的地“${destination}”。`
+                    : "暂未识别具体目的地，可以先生成框架，之后再补。"}
+                {durationDays ? ` 已识别行程时长 ${durationDays} 天。` : " 行程时长待补充。"}
               </p>
-            </div>
-            {path === "material" && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Tag>{dateText || "时间待确认"}</Tag>
+                <Tag>{durationDays ? `${durationDays} 天` : "时长待确认"}</Tag>
+                <Tag>{peopleCount ? `${peopleCount} 人` : "人数待确认"}</Tag>
+              </div>
+            </Card>
+
+            {destinationCandidates.length > 0 && (
               <Card>
-                <p className="text-[13px] font-semibold text-foreground">图片与链接识别结果</p>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{recognizedSources.length} 项内容已完成识别</span>
-                  <Tag tone="accent">需人工确认</Tag>
-                </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                  未识别到的字段不会自动补全，请在下面逐项确认。
+                <p className="text-[13px] font-semibold text-foreground">AI 推荐候选地</p>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  候选仅用于生成建议，不代表你已确认。
                 </p>
-              </Card>
-            )}
-            <Card className="space-y-4">
-              <label className="block">
-                <span className="text-[12px] font-medium text-foreground">目的地</span>
-                <input
-                  value={destination}
-                  onChange={(event) => setDestination(event.target.value)}
-                  placeholder="待确定"
-                  className="mt-1.5 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[13px] outline-none"
-                />
-              </label>
-              <div>
-                <span className="text-[12px] font-medium text-foreground">日期状态</span>
-                <div className="mt-1.5 grid grid-cols-2 gap-2">
-                  {[
-                    ["undecided", "日期待确定"],
-                    ["confirmed", "已有日期"],
-                  ].map(([value, label]) => (
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  {destinationCandidates.map((candidate) => (
                     <button
-                      key={value}
-                      onClick={() => setDateStatus(value as "undecided" | "confirmed")}
-                      className={`rounded-[12px] px-3 py-2.5 text-[12px] font-medium ${
-                        dateStatus === value
+                      key={candidate}
+                      onClick={() => setDestination(candidate)}
+                      className={`rounded-[12px] py-2.5 text-[12px] font-medium ${
+                        destination === candidate
                           ? "bg-brand-soft text-foreground"
                           : "bg-surface-sunk text-muted-foreground"
                       }`}
                     >
-                      {label}
+                      {candidate}
                     </button>
                   ))}
                 </div>
-                {dateStatus === "confirmed" && (
-                  <input
-                    value={dateText}
-                    onChange={(event) => setDateText(event.target.value)}
-                    placeholder="例如：8月12日—8月15日"
-                    className="mt-2 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[13px] outline-none"
-                  />
-                )}
-              </div>
-              <label className="block">
-                <span className="text-[12px] font-medium text-foreground">预计人数</span>
-                <input
-                  value={peopleCount}
-                  min={1}
-                  type="number"
-                  onChange={(event) => setPeopleCount(event.target.value)}
-                  placeholder="待确定"
-                  className="mt-1.5 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[13px] outline-none"
-                />
-              </label>
-              <label className="block">
-                <span className="text-[12px] font-medium text-foreground">预算（可选）</span>
-                <input
-                  value={budget}
-                  min={0}
-                  type="number"
-                  onChange={(event) => setBudget(event.target.value)}
-                  placeholder="未设置"
-                  className="mt-1.5 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[13px] outline-none"
-                />
-              </label>
-            </Card>
-            <PrimaryButton
-              disabled={dateStatus === "confirmed" && !dateText.trim()}
-              onClick={createDraft}
-            >
-              创建旅行草稿
-            </PrimaryButton>
-            {dateStatus === "confirmed" && !dateText.trim() && (
-              <p className="-mt-2 text-center text-[11px] text-muted-foreground">
-                已选择“已有日期”，请填写具体日期
-              </p>
+              </Card>
             )}
+
+            <Card>
+              <p className="text-[13px] font-semibold text-foreground">再回答 3 个关键问题</p>
+              <div className="mt-3 space-y-3">
+                <label className="block">
+                  <span className="text-[11px] text-muted-foreground">从哪里出发？</span>
+                  <input
+                    value={departureCity}
+                    onChange={(event) => setDepartureCity(event.target.value)}
+                    placeholder="待确认"
+                    className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
+                  />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-[11px] text-muted-foreground">几个人？</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={peopleCount}
+                      onChange={(event) => setPeopleCount(event.target.value)}
+                      placeholder="待确认"
+                      className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-[11px] text-muted-foreground">总预算？</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={budget}
+                      onChange={(event) => setBudget(event.target.value)}
+                      placeholder="可稍后补"
+                      className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
+                    />
+                  </label>
+                </div>
+              </div>
+            </Card>
+
+            <PrimaryButton onClick={generatePlan}>
+              <span className="inline-flex items-center gap-1.5">
+                <Route className="size-4" /> 直接生成{durationDays || 3}日行程
+              </span>
+            </PrimaryButton>
+            <p className="-mt-2 text-center text-[10px] text-muted-foreground">
+              未填写项会保留为待确认，不会阻止生成可编辑方案
+            </p>
           </>
         )}
 
-        {step === "done" && draft && (
+        {step === "preview" && (
           <>
-            <Card className="text-center">
-              <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent-soft">
-                <Check className="size-6 text-accent" />
-              </div>
-              <p className="mt-3 text-[16px] font-bold text-foreground">{draft.title}</p>
-              <p className="mt-1 text-[12px] text-muted-foreground">旅行草稿已创建</p>
-            </Card>
-            <Card className="space-y-2 text-[12px]">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">目的地</span>
-                <span className="font-medium text-foreground">{draft.destination ?? "待确定"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">日期</span>
-                <span className="font-medium text-foreground">{draft.dateText ?? "待确定"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">人数</span>
-                <span className="font-medium text-foreground">
-                  {draft.peopleCount ? `${draft.peopleCount} 人` : "待确定"}
-                </span>
-              </div>
-            </Card>
             <Card>
-              <div className="flex items-center gap-2">
-                <Users className="size-4 text-accent" />
-                <p className="text-[14px] font-semibold text-foreground">下一步再邀请同行人</p>
+              <div className="flex items-center justify-between">
+                <Tag tone={planningMode === "plan" ? "accent" : "brand"}>
+                  {planningMode === "plan" ? "AI 规划方案" : "AI 结构化结果"}
+                </Tag>
+                <Sparkles className="size-4 text-accent" />
               </div>
-              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                草稿已经建立。邀请成员需要登录，以便同步成员身份和权限。
-              </p>
-              <button
-                onClick={() => onRequireLogin("邀请同行人需要登录，用于确认身份并同步成员权限。")}
-                className="mt-3 w-full rounded-[12px] bg-surface-sunk py-2.5 text-[12px] font-medium"
-              >
-                邀请同行人
-              </button>
+              <p className="mt-3 text-[13px] leading-relaxed text-foreground/80">{aiSummary}</p>
             </Card>
-            <PrimaryButton onClick={() => onCreated(draft)}>进入旅行草稿</PrimaryButton>
+
+            <Card>
+              <p className="text-[13px] font-semibold text-foreground">已识别与待确认</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {[
+                  [MapPin, "目的地", destination || destinationPreference || null],
+                  [CalendarDays, "日期", dateText || null],
+                  [Clock3, "时长", durationDays ? `${durationDays} 天` : null],
+                  [Users, "人数", peopleCount ? `${peopleCount} 人` : null],
+                ].map(([Icon, label, value]) => {
+                  const FieldIcon = Icon as typeof MapPin;
+                  return (
+                    <div key={String(label)} className="rounded-[12px] bg-surface-sunk p-3">
+                      <FieldIcon className="size-3.5 text-muted-foreground" />
+                      <p className="mt-1 text-[10px] text-muted-foreground">{String(label)}</p>
+                      <p className="mt-0.5 text-[12px] font-medium text-foreground">
+                        {pendingLabel(value as string | null)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-semibold text-foreground">可编辑行程</p>
+                <Tag>{itinerary.length} 项</Tag>
+              </div>
+              {itinerary.length ? (
+                <div className="mt-3 space-y-2">
+                  {itinerary.map((item, index) => (
+                    <div key={item.id} className="flex gap-2 rounded-[12px] bg-surface-sunk p-2.5">
+                      <span className="mt-1 shrink-0 text-[10px] font-semibold text-muted-foreground">
+                        D{item.day ?? index + 1}
+                      </span>
+                      <input
+                        value={item.title}
+                        onChange={(event) =>
+                          setItinerary((current) =>
+                            current.map((entry) =>
+                              entry.id === item.id
+                                ? { ...entry, title: event.target.value }
+                                : entry,
+                            ),
+                          )
+                        }
+                        className="min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none"
+                      />
+                      <Tag tone={item.source === "ai" ? "accent" : "muted"}>
+                        {item.source === "ai" ? "AI 建议" : "来自原文"}
+                      </Tag>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-[12px] bg-surface-sunk p-3 text-center">
+                  <p className="text-[11px] text-muted-foreground">
+                    暂未提取到可确认的行程项，保存后可继续补充文字或让 AI 生成。
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            <Card>
+              <p className="text-[13px] font-semibold text-foreground">推荐下一步</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                先保存为草稿，在草稿页继续编辑基础信息、上传内容和调整每天安排；基本方案完成后再邀请同行人。
+              </p>
+            </Card>
+
+            <PrimaryButton onClick={createDraft}>保存这版旅行草稿</PrimaryButton>
           </>
         )}
       </div>

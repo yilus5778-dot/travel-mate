@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "validate:product": "node scripts/validate-product-model.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

@@ -3,6 +3,9 @@ import type { TabKey } from "@/components/tm/MiniShell";
 
 export type AuthState = "guest" | "authenticated";
 export type TravelStatus = "draft" | "upcoming" | "active" | "completed" | "archived";
+export type TravelDateStatus = "undecided" | "approximate" | "confirmed";
+export type PlanningMode = "organize" | "plan";
+export type AIPlanStatus = "not_started" | "needs_questions" | "organized" | "generated";
 export type SourceStatus = "selected" | "uploading" | "recognizing" | "recognized" | "failed";
 
 export interface SourceItem {
@@ -13,19 +16,35 @@ export interface SourceItem {
   error?: string;
 }
 
+export interface ItineraryItem {
+  id: string;
+  day: number | null;
+  time: string | null;
+  title: string;
+  confirmed: boolean;
+  source: "user" | "ai";
+}
+
 export interface TravelItem {
   id: string;
   title: string;
+  departureCity: string | null;
   destination: string | null;
-  dateStatus: "undecided" | "confirmed";
+  destinationPreference: string | null;
+  destinationCandidates: string[];
+  dateStatus: TravelDateStatus;
   dateText: string | null;
+  durationDays: number | null;
   peopleCount: number | null;
   budget: number | null;
   status: TravelStatus;
-  sourceMode: "idea" | "material";
+  planningMode: PlanningMode;
+  aiPlanStatus: AIPlanStatus;
+  aiSummary: string | null;
+  sourceMode: "idea" | "material" | "multimodal";
   sourceText: string | null;
   sources: SourceItem[];
-  itinerary: Array<{ id: string; time: string | null; title: string; confirmed: boolean }>;
+  itinerary: ItineraryItem[];
   orders: Array<{ id: string; title: string }>;
   members: Array<{ id: string; name: string }>;
   expenses: Array<{ id: string; title: string; amount: number }>;
@@ -91,7 +110,15 @@ const DESTINATIONS = [
   "苏州",
   "昆明",
   "青岛",
+  "北海",
+  "广州",
+  "深圳",
+  "南京",
+  "长沙",
+  "福州",
 ];
+
+const DESTINATION_PREFERENCES = ["海边", "海岛", "山里", "草原", "古镇", "温泉", "滑雪"];
 
 const CHINESE_NUMBERS: Record<string, number> = {
   一: 1,
@@ -112,13 +139,39 @@ function parseCount(value: string) {
   return CHINESE_NUMBERS[value] ?? null;
 }
 
-export function extractTravelFacts(textValue: string) {
+function extractDate(text: string): {
+  dateText: string | null;
+  dateStatus: TravelDateStatus;
+} {
+  const exact = text.match(
+    /(?:\d{1,2}|[一二三四五六七八九十]+)月(?:\d{1,2}日)?(?:\s*[—–到至-]\s*(?:\d{1,2}月)?\d{1,2}日)?/,
+  )?.[0];
+  if (exact) return { dateText: exact, dateStatus: "confirmed" };
+
+  const approximate = text.match(
+    /(?:今年|明年)?(?:春天|夏天|秋天|冬天)|下周|下个月|国庆|春节|暑假|寒假/,
+  )?.[0];
+  return approximate
+    ? { dateText: approximate, dateStatus: "approximate" }
+    : { dateText: null, dateStatus: "undecided" };
+}
+
+export function extractTravelIntent(textValue: string) {
   const text = textValue.trim();
   const knownDestination = DESTINATIONS.find((name) => text.includes(name)) ?? null;
-  const genericDestination = text.match(
+  const genericPlace = text.match(
     /(?:想|计划|打算|准备|要)?去\s*([\u4e00-\u9fffA-Za-z]{2,12}?)(?=旅行|旅游|玩|看看|走走|待|住|过|，|,|。|！|!|和|$)/,
   )?.[1];
-  const destination = knownDestination ?? genericDestination?.trim() ?? null;
+  const explicitPreference =
+    DESTINATION_PREFERENCES.find((preference) => text.includes(preference)) ?? null;
+  const genericIsPreference = genericPlace
+    ? DESTINATION_PREFERENCES.includes(genericPlace.trim())
+    : false;
+  const destination =
+    knownDestination ?? (genericPlace && !genericIsPreference ? genericPlace.trim() : null);
+  const destinationPreference =
+    explicitPreference ?? (genericIsPreference ? genericPlace!.trim() : null);
+
   const friendMatch = text.match(/和([一二两三四五六七八九十\d]+)(?:个)?朋友/);
   const peopleMatch = text.match(/([一二两三四五六七八九十\d]+)\s*人/);
   const peopleCount = friendMatch
@@ -126,14 +179,26 @@ export function extractTravelFacts(textValue: string) {
     : peopleMatch
       ? parseCount(peopleMatch[1])
       : null;
-  const dateText =
-    text.match(
-      /(?:\d{1,2}|[一二三四五六七八九十]+)月(?:\d{1,2}日)?(?:\s*[—–到至-]\s*(?:\d{1,2}月)?\d{1,2}日)?/,
-    )?.[0] ??
-    text.match(/(?:今年|明年)?(?:春天|夏天|秋天|冬天)|下周|下个月|国庆|春节|暑假|寒假/)?.[0] ??
-    null;
+  const durationMatch = text.match(/([一二两三四五六七八九十\d]+)\s*天/);
+  const durationDays = durationMatch ? parseCount(durationMatch[1]) : null;
+  const date = extractDate(text);
+  const lines = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const looksLikeItinerary =
+    lines.length >= 3 ||
+    /(?:^|\n)\s*(?:D\d+|Day\s*\d+|第[一二三四五六七八九十\d]+天|\d{1,2}:\d{2})/i.test(text);
 
-  return { destination, peopleCount, dateText };
+  return {
+    destination,
+    destinationPreference,
+    peopleCount,
+    durationDays,
+    dateText: date.dateText,
+    dateStatus: date.dateStatus,
+    looksLikeItinerary,
+  };
 }
 
 export function isMeaningfulIdea(value: string) {
@@ -143,51 +208,147 @@ export function isMeaningfulIdea(value: string) {
   return /[\u4e00-\u9fff]{2,}|[A-Za-z]{4,}/.test(text);
 }
 
+export function getDestinationCandidates(preference: string | null) {
+  if (!preference) return [];
+  if (preference === "海边" || preference === "海岛") return ["厦门", "青岛", "北海"];
+  if (preference === "古镇") return ["苏州", "大理", "杭州"];
+  if (preference === "山里") return ["大理", "成都", "昆明"];
+  if (preference === "温泉") return ["福州", "昆明", "成都"];
+  if (preference === "滑雪") return ["北京", "青岛", "西安"];
+  return [];
+}
+
+const ITINERARY_TEMPLATES: Record<string, string[]> = {
+  厦门: ["抵达与环岛路慢游", "鼓浪屿核心体验", "沙坡尾散步与返程"],
+  青岛: ["抵达与老城散步", "海岸线与崂山方向体验", "八大关慢游与返程"],
+  北海: ["抵达与银滩日落", "涠洲岛方向一日体验", "老街散步与返程"],
+};
+
+export function buildSuggestedItinerary(
+  destination: string | null,
+  durationDays: number | null,
+): ItineraryItem[] {
+  const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
+  const template = destination ? ITINERARY_TEMPLATES[destination] : undefined;
+  const generic = ["抵达、安顿与轻量探索", "核心体验与弹性安排", "自由活动与返程"];
+
+  return Array.from({ length: days }, (_, index) => ({
+    id: `ai-itinerary-${Date.now()}-${index}`,
+    day: index + 1,
+    time: null,
+    title: template?.[index] ?? generic[index] ?? `第 ${index + 1} 天 · 待继续细化`,
+    confirmed: false,
+    source: "ai" as const,
+  }));
+}
+
+export function organizePastedItinerary(textValue: string): ItineraryItem[] {
+  const lines = textValue
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 2)
+    .slice(0, 12);
+
+  return lines.map((line, index) => ({
+    id: `user-itinerary-${Date.now()}-${index}`,
+    day: index + 1,
+    time: line.match(/\b\d{1,2}:\d{2}\b/)?.[0] ?? null,
+    title: line.replace(/^(?:D\d+|Day\s*\d+|第[一二三四五六七八九十\d]+天)[:：\s-]*/i, ""),
+    confirmed: false,
+    source: "user",
+  }));
+}
+
 export function createTravelDraft({
-  idea,
-  destinationOverride,
+  inputText,
+  departureCity,
+  destination,
+  destinationPreference,
+  destinationCandidates,
   dateStatus,
   dateText,
+  durationDays,
   peopleCount,
   budget,
-  sourceMode,
+  planningMode,
+  aiPlanStatus,
+  aiSummary,
   sources,
+  itinerary,
 }: {
-  idea?: string;
-  destinationOverride?: string;
-  dateStatus: "undecided" | "confirmed";
-  dateText?: string;
+  inputText: string;
+  departureCity?: string | null;
+  destination?: string | null;
+  destinationPreference?: string | null;
+  destinationCandidates?: string[];
+  dateStatus: TravelDateStatus;
+  dateText?: string | null;
+  durationDays?: number | null;
   peopleCount?: number | null;
   budget?: number | null;
-  sourceMode: "idea" | "material";
+  planningMode: PlanningMode;
+  aiPlanStatus: AIPlanStatus;
+  aiSummary?: string | null;
   sources?: SourceItem[];
+  itinerary?: ItineraryItem[];
 }): TravelItem {
-  const text = idea?.trim() ?? "";
-  const extracted = extractTravelFacts(text);
-  const destination =
-    destinationOverride === undefined ? extracted.destination : destinationOverride.trim() || null;
-  const finalPeopleCount = peopleCount === undefined ? extracted.peopleCount : peopleCount;
   const now = new Date().toISOString();
+  const finalDestination = destination?.trim() || null;
 
   return {
     id: `trip-${Date.now()}`,
-    title: destination ? `${destination}旅行草稿` : "未命名旅行草稿",
-    destination,
+    title: finalDestination ? `${finalDestination}旅行草稿` : "未命名旅行草稿",
+    departureCity: departureCity?.trim() || null,
+    destination: finalDestination,
+    destinationPreference: destinationPreference?.trim() || null,
+    destinationCandidates: destinationCandidates ?? [],
     dateStatus,
-    dateText: dateStatus === "confirmed" ? dateText?.trim() || null : null,
-    peopleCount: finalPeopleCount,
+    dateText: dateText?.trim() || null,
+    durationDays: durationDays ?? null,
+    peopleCount: peopleCount ?? null,
     budget: budget ?? null,
     status: "draft",
-    sourceMode,
-    sourceText: text || null,
+    planningMode,
+    aiPlanStatus,
+    aiSummary: aiSummary ?? null,
+    sourceMode: "multimodal",
+    sourceText: inputText.trim() || null,
     sources: sources ?? [],
-    itinerary: [],
+    itinerary: itinerary ?? [],
     orders: [],
     members: [],
     expenses: [],
     photos: [],
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+export function normalizeTravelItem(travel: TravelItem): TravelItem {
+  const legacy = travel as TravelItem & {
+    departureCity?: string | null;
+    destinationPreference?: string | null;
+    destinationCandidates?: string[];
+    durationDays?: number | null;
+    planningMode?: PlanningMode;
+    aiPlanStatus?: AIPlanStatus;
+    aiSummary?: string | null;
+  };
+
+  return {
+    ...travel,
+    departureCity: legacy.departureCity ?? null,
+    destinationPreference: legacy.destinationPreference ?? null,
+    destinationCandidates: legacy.destinationCandidates ?? [],
+    durationDays: legacy.durationDays ?? null,
+    planningMode: legacy.planningMode ?? (travel.sourceMode === "material" ? "organize" : "plan"),
+    aiPlanStatus: legacy.aiPlanStatus ?? (travel.itinerary?.length ? "organized" : "not_started"),
+    aiSummary: legacy.aiSummary ?? null,
+    itinerary: (travel.itinerary ?? []).map((item, index) => ({
+      ...item,
+      day: item.day ?? index + 1,
+      source: item.source ?? "user",
+    })),
   };
 }
 

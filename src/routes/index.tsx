@@ -9,6 +9,7 @@ import { MiniShell } from "@/components/tm/MiniShell";
 import {
   EMPTY_STATE,
   memoriesFromReasons,
+  normalizeTravelItem,
   type CompanionProfile,
   type TravelItem,
   type TravelmateState,
@@ -22,13 +23,12 @@ export const Route = createFileRoute("/")({
       { title: "travelmate · 微信小程序原型" },
       {
         name: "description",
-        content:
-          "travelmate 可靠产品逻辑原型：可追溯的搭子匹配、真实旅行草稿、统一状态和明确隐私授权。",
+        content: "travelmate AI 旅行规划原型：统一多模态输入、主动追问、可编辑行程和可靠状态。",
       },
       { property: "og:title", content: "travelmate · 微信小程序原型" },
       {
         property: "og:description",
-        content: "不编造用户数据的旅行搭子与行程协作原型。",
+        content: "用户随便说、随便传，AI 主动整理并交付可编辑旅行方案。",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -48,7 +48,12 @@ function Index() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as TravelmateState;
-        if (parsed.version === 2) setState(parsed);
+        if (parsed.version === 2) {
+          setState({
+            ...parsed,
+            travels: (parsed.travels ?? []).map(normalizeTravelItem),
+          });
+        }
       }
     } catch {
       window.localStorage.removeItem(STORAGE_KEY);
@@ -119,6 +124,18 @@ function Index() {
     }));
   };
 
+  const deleteTravel = (id: string) => {
+    setState((current) => {
+      const travels = current.travels.filter((travel) => travel.id !== id);
+      return {
+        ...current,
+        travels,
+        activeTravelId:
+          current.activeTravelId === id ? (travels[0]?.id ?? null) : current.activeTravelId,
+      };
+    });
+  };
+
   const content = !hydrated ? (
     <MiniShell title="travelmate" showTabBar={false}>
       <div className="flex h-full flex-col items-center justify-center px-8 text-center">
@@ -149,6 +166,7 @@ function Index() {
       onSelectTravel={(id) => setState((current) => ({ ...current, activeTravelId: id }))}
       onCreateTravel={createTravel}
       onUpdateTravel={updateTravel}
+      onDeleteTravel={deleteTravel}
       onRequireLogin={requestLogin}
     />
   ) : state.tab === "companion" ? (
