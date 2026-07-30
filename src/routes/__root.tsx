@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
-import appCss from "../styles.css?url";
+import "../styles.css";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -80,14 +80,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "viewport",
         content: "width=device-width, initial-scale=1, viewport-fit=cover",
       },
-      { title: "TravelMate 捣鼓旅行" },
+      { title: "travelmate" },
       {
         name: "description",
         content: "匹配专属旅行搭子，把群聊、攻略和订单整理成可执行的同行旅程。",
       },
-      { name: "author", content: "TravelMate" },
+      { name: "author", content: "travelmate" },
       { name: "theme-color", content: "#f4c84e" },
-      { property: "og:title", content: "TravelMate 捣鼓旅行" },
+      { property: "og:title", content: "travelmate" },
       {
         property: "og:description",
         content: "5 道偏好测试匹配旅行搭子，把零散信息变成清晰行程。",
@@ -106,10 +106,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Color+Emoji&display=swap",
       },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
@@ -127,7 +123,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
-        <Scripts />
+        {typeof window === "undefined" ? <Scripts /> : null}
       </body>
     </html>
   );

@@ -60,7 +60,7 @@ export function MineTab({
           ))}
         </div>
         <p className="pt-2 text-center text-[11px] text-muted-foreground/70">
-          TravelMate · 捣鼓旅行 V1.1 原型
+          travelmate V1.1 原型
         </p>
       </div>
     </MiniShell>

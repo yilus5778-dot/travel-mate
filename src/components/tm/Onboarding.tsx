@@ -34,10 +34,10 @@ export function Onboarding({
 
   if (step === "welcome") {
     return (
-      <MiniShell title="TravelMate" showTabBar={false}>
+      <MiniShell title="travelmate" showTabBar={false}>
         <div className="flex h-full flex-col justify-between px-6 pb-8 pt-10">
           <div className="text-center">
-            <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">捣鼓旅行</p>
+            <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">travelmate</p>
             <h1 className="mt-3 text-[26px] font-bold leading-snug text-foreground">
               和搭子一起
               <br />
@@ -159,7 +159,7 @@ export function Onboarding({
             </p>
           </Card>
           <Card className="mt-3">
-            <p className="text-[12px] font-semibold text-foreground">在 TravelMate 里，我会这样帮你</p>
+            <p className="text-[12px] font-semibold text-foreground">在 travelmate 里，我会这样帮你</p>
             <ul className="mt-2 space-y-1.5 text-[12px] text-muted-foreground">
               <li>· {companion.behavior}</li>
               <li>· 记住你的节奏偏好，下次直接套用</li>
