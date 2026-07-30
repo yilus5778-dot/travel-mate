@@ -35,7 +35,7 @@ export function Onboarding({
   if (step === "welcome") {
     return (
       <MiniShell title="travelmate" showTabBar={false}>
-        <div className="flex h-full flex-col justify-between px-6 pb-8 pt-10">
+        <div className="flex min-h-full flex-col px-6 pb-6 pt-5">
           <div className="text-center">
             <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">travelmate</p>
             <h1 className="mt-3 text-[26px] font-bold leading-snug text-foreground">
@@ -47,15 +47,15 @@ export function Onboarding({
               5 道小问题，约 45 秒，帮你匹配一位专属旅行搭子。
             </p>
           </div>
-          <div className="relative flex justify-center py-6">
-            <div className="absolute size-52 rounded-full bg-brand-soft" />
-            <div className="relative grid grid-cols-3 gap-3 text-4xl">
+          <div className="relative mx-auto mt-5 flex h-40 w-full shrink-0 items-center justify-center">
+            <div className="absolute size-40 rounded-full bg-brand-soft" />
+            <div className="relative grid grid-cols-3 gap-x-5 gap-y-3 text-3xl">
               {Object.values(COMPANIONS).slice(0, 6).map((c) => (
                 <span key={c.key} className="drop-shadow-sm">{c.emoji}</span>
               ))}
             </div>
           </div>
-          <div className="space-y-3">
+          <div className="mt-auto space-y-2 pt-5">
             <PrimaryButton onClick={() => setStep("quiz")}>秒匹配我的搭子</PrimaryButton>
             <button
               onClick={onSkip}
