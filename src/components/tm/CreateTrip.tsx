@@ -10,7 +10,7 @@ import {
 import {
   AlertCircle,
   Check,
-  FileUp,
+  ImageUp,
   Lightbulb,
   Link2,
   LoaderCircle,
@@ -25,9 +25,9 @@ type Step = "path" | "input" | "processing" | "confirm" | "done";
 const PATHS = [
   {
     key: "material" as const,
-    icon: FileUp,
-    title: "已有攻略或订单",
-    desc: "选择真实资料 → 识别 → 逐项确认",
+    icon: ImageUp,
+    title: "已有图片或网页链接",
+    desc: "上传图片或粘贴链接 → 自动识别 → 逐项确认",
   },
   {
     key: "idea" as const,
@@ -65,8 +65,10 @@ export function CreateTrip({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const meaningfulIdea = isMeaningfulIdea(idea);
-  const usableSources = sources.filter((source) => source.status !== "failed");
-  const failedSources = sources.filter((source) => source.status === "failed");
+  const recognizedSources = sources.filter((source) => source.status === "recognized");
+  const recognizingSources = sources.filter((source) =>
+    ["selected", "uploading", "recognizing"].includes(source.status),
+  );
 
   const back = () => {
     if (step === "path") return onCancel();
@@ -90,38 +92,41 @@ export function CreateTrip({
   };
 
   const processInput = async () => {
-    if (path === "idea") {
-      setIdeaTouched(true);
-      if (!meaningfulIdea) return;
-    }
-    if (path === "material" && usableSources.length === 0) return;
+    setIdeaTouched(true);
+    if (!meaningfulIdea) return;
 
     setStep("processing");
-    setProcessingLabel(path === "material" ? "正在上传资料…" : "正在读取你的想法…");
-    if (path === "material") {
-      setSources((current) =>
-        current.map((source) =>
-          source.status === "failed" ? source : { ...source, status: "uploading" },
-        ),
-      );
-    }
+    setProcessingLabel("正在读取你的想法…");
     await wait(500);
     setProcessingLabel("正在提取明确存在的信息…");
-    if (path === "material") {
-      setSources((current) =>
-        current.map((source) =>
-          source.status === "failed" ? source : { ...source, status: "recognizing" },
-        ),
-      );
-    }
     await wait(800);
-    const evidence = path === "idea" ? idea : usableSources.map((source) => source.name).join(" ");
+    prepareConfirmation(idea);
+  };
+
+  const recognizeSources = async (ids: string[]) => {
     setSources((current) =>
       current.map((source) =>
-        source.status === "failed" ? source : { ...source, status: "recognized" },
+        ids.includes(source.id) && source.status !== "failed"
+          ? { ...source, status: "uploading" }
+          : source,
       ),
     );
-    prepareConfirmation(evidence);
+    await wait(450);
+    setSources((current) =>
+      current.map((source) =>
+        ids.includes(source.id) && source.status !== "failed"
+          ? { ...source, status: "recognizing" }
+          : source,
+      ),
+    );
+    await wait(650);
+    setSources((current) =>
+      current.map((source) =>
+        ids.includes(source.id) && source.status !== "failed"
+          ? { ...source, status: "recognized" }
+          : source,
+      ),
+    );
   };
 
   const addLink = () => {
@@ -129,17 +134,16 @@ export function CreateTrip({
     try {
       const url = new URL(value);
       if (!["http:", "https:"].includes(url.protocol)) throw new Error("unsupported");
-      setSources((current) => [
-        ...current,
-        {
-          id: `link-${Date.now()}`,
-          kind: "link",
-          name: value,
-          status: "selected",
-        },
-      ]);
+      const source: SourceItem = {
+        id: `link-${Date.now()}`,
+        kind: "link",
+        name: value,
+        status: "selected",
+      };
+      setSources((current) => [...current, source]);
       setLink("");
       setLinkError("");
+      void recognizeSources([source.id]);
     } catch {
       setLinkError("请输入完整的 http 或 https 链接");
     }
@@ -148,14 +152,14 @@ export function CreateTrip({
   const createDraft = () => {
     if (dateStatus === "confirmed" && !dateText.trim()) return;
     const nextDraft = createTravelDraft({
-      idea: path === "idea" ? idea : usableSources.map((source) => source.name).join(" "),
+      idea: path === "idea" ? idea : recognizedSources.map((source) => source.name).join(" "),
       destinationOverride: destination,
       dateStatus,
       dateText,
       peopleCount: peopleCount ? Number(peopleCount) : null,
       budget: budget ? Number(budget) : null,
       sourceMode: path ?? "idea",
-      sources: sources.filter((source) => source.status !== "failed"),
+      sources: recognizedSources,
     });
     setDraft(nextDraft);
     setStep("done");
@@ -238,36 +242,40 @@ export function CreateTrip({
             <Card>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[15px] font-semibold text-foreground">导入真实资料</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">支持图片、PDF 和文本文件</p>
+                  <p className="text-[15px] font-semibold text-foreground">导入图片或网页链接</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    支持相册图片和网页，添加后自动识别
+                  </p>
                 </div>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className="rounded-[10px] bg-brand-soft px-3 py-2 text-[12px] font-medium text-foreground"
                 >
-                  选择文件
+                  上传图片
                 </button>
                 <input
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*,.pdf,.txt"
+                  accept="image/*"
                   className="hidden"
                   onChange={(event) => {
                     const next = Array.from(event.target.files ?? []).map((file) => {
-                      const supported =
-                        file.type.startsWith("image/") ||
-                        file.type === "application/pdf" ||
-                        file.type === "text/plain";
+                      const supported = file.type.startsWith("image/");
                       return {
-                        id: `file-${Date.now()}-${file.name}`,
-                        kind: "file" as const,
+                        id: `image-${Date.now()}-${file.name}`,
+                        kind: "image" as const,
                         name: file.name,
                         status: supported ? ("selected" as const) : ("failed" as const),
-                        error: supported ? undefined : "暂不支持此文件类型",
+                        error: supported ? undefined : "请选择图片格式",
                       };
                     });
                     setSources((current) => [...current, ...next]);
+                    void recognizeSources(
+                      next
+                        .filter((source) => source.status !== "failed")
+                        .map((source) => source.id),
+                    );
                     event.target.value = "";
                   }}
                 />
@@ -275,10 +283,12 @@ export function CreateTrip({
 
               {sources.length === 0 ? (
                 <div className="mt-4 rounded-[14px] border border-dashed border-border bg-surface-sunk px-4 py-6 text-center">
-                  <FileUp className="mx-auto size-5 text-muted-foreground" />
-                  <p className="mt-2 text-[12px] font-medium text-foreground">尚未选择资料</p>
+                  <ImageUp className="mx-auto size-5 text-muted-foreground" />
+                  <p className="mt-2 text-[12px] font-medium text-foreground">
+                    尚未上传图片或添加链接
+                  </p>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    选择后才会显示真实文件数量
+                    支持多张图片和多个网页链接
                   </p>
                 </div>
               ) : (
@@ -290,17 +300,41 @@ export function CreateTrip({
                     >
                       {source.status === "failed" ? (
                         <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                      ) : (
+                      ) : source.status === "recognized" ? (
                         <Check className="mt-0.5 size-4 shrink-0 text-accent" />
+                      ) : (
+                        <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-accent" />
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-medium text-foreground">
                           {source.name}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {source.error ?? "已选择，等待识别"}
+                          {source.error ??
+                            (source.status === "recognized"
+                              ? "自动识别完成"
+                              : source.status === "recognizing"
+                                ? "正在识别内容…"
+                                : "正在上传图片或读取链接…")}
                         </p>
                       </div>
+                      {source.status === "failed" && (
+                        <button
+                          aria-label={`重新识别 ${source.name}`}
+                          onClick={() => {
+                            setSources((current) =>
+                              current.map((item) =>
+                                item.id === source.id
+                                  ? { ...item, status: "selected", error: undefined }
+                                  : item,
+                              ),
+                            );
+                            void recognizeSources([source.id]);
+                          }}
+                        >
+                          <RotateCcw className="size-4 text-muted-foreground" />
+                        </button>
+                      )}
                       <button
                         aria-label={`删除 ${source.name}`}
                         onClick={() =>
@@ -318,34 +352,36 @@ export function CreateTrip({
                 <input
                   value={link}
                   onChange={(event) => setLink(event.target.value)}
-                  placeholder="添加攻略或订单链接"
+                  placeholder="粘贴攻略、订单或地图网页链接"
                   className="min-w-0 flex-1 rounded-[12px] bg-surface-sunk px-3 py-2 text-[12px] outline-none"
                 />
                 <button
                   onClick={addLink}
                   className="flex items-center gap-1 rounded-[12px] bg-brand-soft px-3 text-[12px] font-medium"
                 >
-                  <Link2 className="size-3.5" /> 添加
+                  <Link2 className="size-3.5" /> 添加并识别
                 </button>
               </div>
               {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
             </Card>
 
-            <PrimaryButton disabled={usableSources.length === 0} onClick={processInput}>
-              上传并开始识别
+            <PrimaryButton
+              disabled={recognizedSources.length === 0 || recognizingSources.length > 0}
+              onClick={() =>
+                prepareConfirmation(recognizedSources.map((source) => source.name).join(" "))
+              }
+            >
+              查看识别结果
             </PrimaryButton>
-            {usableSources.length === 0 && (
+            {sources.length === 0 && (
               <p className="-mt-2 text-center text-[11px] text-muted-foreground">
-                请先选择支持的文件或添加有效链接
+                请先上传图片或添加有效网页链接
               </p>
             )}
-            {failedSources.length > 0 && usableSources.length === 0 && (
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="flex w-full items-center justify-center gap-1.5 py-2 text-[12px] text-foreground"
-              >
-                <RotateCcw className="size-3.5" /> 重新选择
-              </button>
+            {recognizingSources.length > 0 && (
+              <p className="-mt-2 text-center text-[11px] text-muted-foreground">
+                正在自动识别，请稍候
+              </p>
             )}
           </>
         )}
@@ -372,9 +408,9 @@ export function CreateTrip({
             </div>
             {path === "material" && (
               <Card>
-                <p className="text-[13px] font-semibold text-foreground">资料识别结果</p>
+                <p className="text-[13px] font-semibold text-foreground">图片与链接识别结果</p>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{usableSources.length} 项资料已完成识别</span>
+                  <span>{recognizedSources.length} 项内容已完成识别</span>
                   <Tag tone="accent">需人工确认</Tag>
                 </div>
                 <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">

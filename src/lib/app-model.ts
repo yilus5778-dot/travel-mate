@@ -7,7 +7,7 @@ export type SourceStatus = "selected" | "uploading" | "recognizing" | "recognize
 
 export interface SourceItem {
   id: string;
-  kind: "file" | "link";
+  kind: "image" | "link";
   name: string;
   status: SourceStatus;
   error?: string;
