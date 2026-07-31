@@ -931,14 +931,153 @@ function NewTripCard({ prominent, onClick }: { prominent: boolean; onClick: () =
   );
 }
 
+function createExperienceSample(): TravelItem {
+  const itinerary: ItineraryItem[] = (
+    [
+      ["sample-d1-1", 1, "09:00", "抵达厦门与办理入住"],
+      ["sample-d1-2", 1, "13:30", "环岛路海岸慢游"],
+      ["sample-d1-3", 1, "18:00", "曾厝垵晚餐与散步"],
+      ["sample-d2-1", 2, "08:30", "鼓浪屿轮渡与登岛"],
+      ["sample-d2-2", 2, "11:00", "鼓浪屿核心街区"],
+      ["sample-d2-3", 2, "17:30", "海边日落与返程"],
+      ["sample-d3-1", 3, "09:30", "沙坡尾艺术街区"],
+      ["sample-d3-2", 3, "12:00", "八市在地午餐体验"],
+      ["sample-d3-3", 3, "15:30", "伴手礼与返程"],
+    ] as Array<[string, number, string, string]>
+  ).map(([id, day, time, title]) => ({
+    id: String(id),
+    day: Number(day),
+    time: String(time),
+    title: String(title),
+    confirmed: true,
+    source: "ai",
+  }));
+
+  return {
+    id: "experience-sample-xiamen",
+    title: "厦门三日轻旅行",
+    departureCity: "广州",
+    destination: "厦门",
+    destinationPreference: "海边",
+    destinationCandidates: ["厦门", "青岛", "北海"],
+    dateStatus: "confirmed",
+    dateText: "10月1日—10月3日",
+    durationDays: 3,
+    peopleCount: 2,
+    budget: 5000,
+    status: "upcoming",
+    planningMode: "plan",
+    aiPlanStatus: "generated",
+    aiSummary: "这是独立的体验样例：每天保留三个核心节点，兼顾海边慢游、在地体验和返程节奏。",
+    sourceMode: "idea",
+    sourceText: "体验样例，不属于任何真实用户",
+    sources: [],
+    itinerary,
+    orders: [
+      { id: "sample-order-flight", title: "往返交通 · 已确认" },
+      { id: "sample-order-hotel", title: "两晚住宿 · 已确认" },
+    ],
+    members: [
+      { id: "sample-member-1", name: "体验成员 A" },
+      { id: "sample-member-2", name: "体验成员 B" },
+    ],
+    expenses: [],
+    photos: [],
+    createdAt: "2026-07-31T00:00:00.000Z",
+    updatedAt: "2026-07-31T00:00:00.000Z",
+  };
+}
+
+function ExperienceSampleView({
+  travel,
+  onPatch,
+  onBack,
+  onStartPlanning,
+}: {
+  travel: TravelItem;
+  onPatch: (patch: Partial<TravelItem>) => void;
+  onBack: () => void;
+  onStartPlanning: () => void;
+}) {
+  return (
+    <MiniShell title="体验样例" onBack={onBack} showTabBar={false}>
+      <div className="space-y-4 px-5 pb-8 pt-2">
+        <Card className="relative overflow-hidden bg-brand-soft">
+          <div className="absolute -right-10 -top-12 size-36 rounded-full bg-card/45" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <Tag tone="accent">完整体验样例</Tag>
+              <span className="text-[10px] font-medium text-muted-foreground">不写入用户数据</span>
+            </div>
+            <p className="mt-4 text-[11px] font-medium text-muted-foreground">广州 → 厦门</p>
+            <h2 className="mt-1 text-[23px] font-bold text-foreground">{travel.title}</h2>
+            <p className="mt-2 max-w-[17rem] text-[11px] leading-relaxed text-foreground/70">
+              {travel.aiSummary}
+            </p>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {[
+                [CalendarDays, travel.dateText],
+                [Users, `${travel.peopleCount} 人`],
+                [Wallet, `预算 ¥${travel.budget}`],
+              ].map(([Icon, label]) => {
+                const FieldIcon = Icon as typeof CalendarDays;
+                return (
+                  <div key={String(label)} className="rounded-[13px] bg-card/75 p-2.5">
+                    <FieldIcon className="size-3.5 text-muted-foreground" />
+                    <p className="mt-1 text-[9px] font-medium text-foreground">{String(label)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </Card>
+
+        <DayPlanEditor travel={travel} onPatch={onPatch} />
+
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="!p-3">
+            <Receipt className="size-4 text-accent" />
+            <p className="mt-2 text-[12px] font-semibold text-foreground">订单已确认</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">交通、住宿共 2 项</p>
+          </Card>
+          <Card className="!p-3">
+            <ClipboardList className="size-4 text-accent" />
+            <p className="mt-2 text-[12px] font-semibold text-foreground">行前清单</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">5 项已完成，1 项待办</p>
+          </Card>
+        </div>
+
+        <Card>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="size-4 text-accent" />
+            <p className="text-[13px] font-semibold text-foreground">这个样例为什么可执行</p>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {["每天 3 个核心节点", "路线顺序明确", "时间可编辑", "订单与清单已关联"].map((item) => (
+              <Tag key={item}>{item}</Tag>
+            ))}
+          </div>
+        </Card>
+
+        <PrimaryButton onClick={onStartPlanning}>按这种方式规划我的旅行</PrimaryButton>
+        <p className="-mt-2 text-center text-[9px] text-muted-foreground">
+          只会打开真实创建流程，不会复制样例中的目的地、日期、同行人或预算。
+        </p>
+      </div>
+    </MiniShell>
+  );
+}
+
 function RecentTrips({
   travels,
   compact = false,
   onOpen,
+  onOpenSample,
 }: {
   travels: TravelItem[];
   compact?: boolean;
   onOpen: (id: string) => void;
+  onOpenSample: () => void;
 }) {
   const recent = travels
     .filter((item) => ["completed", "archived"].includes(item.status))
@@ -948,32 +1087,31 @@ function RecentTrips({
     <section>
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-[14px] font-semibold text-foreground">近期旅行</h2>
-        {!recent.length && <Tag>体验样例</Tag>}
+        <Tag>体验样例可查看</Tag>
       </div>
-      {recent.length ? (
-        <div className="space-y-2">
-          {recent.map((item) => (
-            <button
-              type="button"
-              key={item.id}
-              onClick={() => onOpen(item.id)}
-              className="flex w-full items-center gap-3 rounded-[18px] bg-card p-3 text-left shadow-[var(--shadow-card)]"
-            >
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-surface-sunk">
-                <MapPin className="size-4 text-accent" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-foreground">{item.title}</p>
-                <p className="mt-0.5 text-[10px] text-muted-foreground">
-                  {item.dateText ?? "日期待确定"} · {TRAVEL_STATUS_LABELS[item.status]}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <div
-          className={`flex items-center gap-3 rounded-[18px] border border-dashed border-border bg-card/70 ${
+      <div className="space-y-2">
+        {recent.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            onClick={() => onOpen(item.id)}
+            className="flex w-full items-center gap-3 rounded-[18px] bg-card p-3 text-left shadow-[var(--shadow-card)]"
+          >
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-surface-sunk">
+              <MapPin className="size-4 text-accent" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-foreground">{item.title}</p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                {item.dateText ?? "日期待确定"} · {TRAVEL_STATUS_LABELS[item.status]}
+              </p>
+            </div>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={onOpenSample}
+          className={`flex w-full items-center gap-3 rounded-[18px] border border-dashed border-border bg-card/70 text-left transition-transform active:scale-[0.99] ${
             compact ? "p-3" : "p-4"
           }`}
         >
@@ -990,11 +1128,12 @@ function RecentTrips({
               <span className="shrink-0 text-[9px] font-medium text-accent">示例</span>
             </div>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              厦门 · 3 天 · 独立样例，不会写入你的旅行
+              厦门 · 3 天 · 点击查看完整标杆案例
             </p>
           </div>
-        </div>
-      )}
+          <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </div>
     </section>
   );
 }
@@ -1022,7 +1161,8 @@ export function TripsTab({
   onDeleteTravel: (id: string) => void;
   onRequireLogin: (reason: string) => void;
 }) {
-  const [view, setView] = useState<"home" | "trip" | "create">("home");
+  const [view, setView] = useState<"home" | "trip" | "create" | "sample">("home");
+  const [sampleTravel, setSampleTravel] = useState<TravelItem>(createExperienceSample);
   const travel = travels.find((item) => item.id === activeTravelId) ?? travels[0] ?? null;
   const plannedTravel =
     travels.find((item) => ["active", "upcoming", "draft"].includes(item.status)) ?? travel;
@@ -1030,6 +1170,23 @@ export function TripsTab({
   useEffect(() => {
     if (!travel && view === "trip") setView("home");
   }, [travel, view]);
+
+  if (view === "sample") {
+    return (
+      <ExperienceSampleView
+        travel={sampleTravel}
+        onBack={() => setView("home")}
+        onStartPlanning={() => setView("create")}
+        onPatch={(patch) =>
+          setSampleTravel((current) => ({
+            ...current,
+            ...patch,
+            updatedAt: new Date().toISOString(),
+          }))
+        }
+      />
+    );
+  }
 
   if (view === "create") {
     return (
@@ -1055,6 +1212,7 @@ export function TripsTab({
               onSelectTravel(id);
               setView("trip");
             }}
+            onOpenSample={() => setView("sample")}
           />
         </div>
       </MiniShell>
@@ -1149,6 +1307,7 @@ export function TripsTab({
               onSelectTravel(id);
               setView("trip");
             }}
+            onOpenSample={() => setView("sample")}
           />
 
           {travels
