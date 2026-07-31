@@ -8,6 +8,8 @@ export type PlanningMode = "organize" | "plan";
 export type AIPlanStatus = "not_started" | "needs_questions" | "organized" | "generated";
 export type SourceStatus = "selected" | "uploading" | "recognizing" | "recognized" | "failed";
 export type ExpenseCategory = "food" | "transport" | "hotel" | "ticket" | "shopping" | "other";
+export type ExpenseSplitMode = "equal" | "custom" | "personal";
+export type CollaborationRole = "owner" | "editor" | "viewer";
 
 export interface SourceItem {
   id: string;
@@ -32,7 +34,45 @@ export interface ExpenseItem {
   amount: number;
   category: ExpenseCategory;
   paidBy: string;
+  splitMode: ExpenseSplitMode;
+  shares: Array<{ name: string; amount: number }>;
+  note: string | null;
+  spentAt: string;
+  createdBy: string;
   createdAt: string;
+}
+
+export interface SettlementItem {
+  id: string;
+  from: string;
+  to: string;
+  amount: number;
+  settledAt: string;
+}
+
+export interface CollaborationMember {
+  id: string;
+  name: string;
+  role: CollaborationRole;
+  joinedAt: string;
+}
+
+export interface CollaborationEvent {
+  id: string;
+  actor: string;
+  action: string;
+  createdAt: string;
+}
+
+export interface CollaborationMeta {
+  sharedTripId: string;
+  inviteCode: string;
+  role: CollaborationRole;
+  inviteRole: Exclude<CollaborationRole, "owner">;
+  revision: number;
+  members: CollaborationMember[];
+  events: CollaborationEvent[];
+  syncedAt: string;
 }
 
 export interface TravelItem {
@@ -58,6 +98,8 @@ export interface TravelItem {
   orders: Array<{ id: string; title: string }>;
   members: Array<{ id: string; name: string }>;
   expenses: ExpenseItem[];
+  settlements: SettlementItem[];
+  collaboration: CollaborationMeta | null;
   photos: Array<{ id: string; name: string }>;
   createdAt: string;
   updatedAt: string;
@@ -352,6 +394,8 @@ export function createTravelDraft({
     orders: [],
     members: [],
     expenses: [],
+    settlements: [],
+    collaboration: null,
     photos: [],
     createdAt: now,
     updatedAt: now,
@@ -367,6 +411,8 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
     planningMode?: PlanningMode;
     aiPlanStatus?: AIPlanStatus;
     aiSummary?: string | null;
+    settlements?: SettlementItem[];
+    collaboration?: CollaborationMeta | null;
   };
 
   return {
@@ -387,8 +433,17 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
       ...expense,
       category: expense.category ?? "other",
       paidBy: expense.paidBy ?? "我",
+      splitMode: expense.splitMode ?? "equal",
+      shares: expense.shares ?? [
+        { name: expense.paidBy ?? "我", amount: Number(expense.amount ?? 0) },
+      ],
+      note: expense.note ?? null,
+      spentAt: expense.spentAt ?? expense.createdAt ?? travel.updatedAt,
+      createdBy: expense.createdBy ?? expense.paidBy ?? "我",
       createdAt: expense.createdAt ?? travel.updatedAt,
     })),
+    settlements: legacy.settlements ?? [],
+    collaboration: legacy.collaboration ?? null,
   };
 }
 

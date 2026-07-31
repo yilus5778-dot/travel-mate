@@ -38,6 +38,8 @@ import {
 } from "@/lib/app-model";
 import { MiniShell, Card, PrimaryButton, Tag, type TabKey } from "./MiniShell";
 import { CreateTrip } from "./CreateTrip";
+import { AccountingCenter } from "./AccountingCenter";
+import { CollaborationCenter } from "./CollaborationCenter";
 
 function valueOrPending(value: string | number | null) {
   return value === null || value === "" ? "待确定" : String(value);
@@ -117,6 +119,14 @@ function ExpenseLedger({
           amount: numericAmount,
           category,
           paidBy,
+          splitMode: "equal",
+          shares: payerOptions.map((name) => ({
+            name,
+            amount: numericAmount / Math.max(payerOptions.length, 1),
+          })),
+          note: null,
+          spentAt: new Date().toISOString(),
+          createdBy: "我",
           createdAt: new Date().toISOString(),
         },
         ...travel.expenses,
@@ -1020,8 +1030,10 @@ function UpcomingView({
       />
       <EmptySection
         icon={CircleDollarSign}
-        title="记账将在旅行中开启"
-        description="开始旅行后可以分类记录真实消费，结束后自动进入 AA 结算。"
+        title={
+          travel.expenses.length ? `共同账本已有 ${travel.expenses.length} 笔` : "共同账本尚未开始"
+        }
+        description="预算旁的“记账”入口可随时记录预订支出、分类消费和 AA 分摊。"
       />
       <StatusAction travel={travel} onUpdate={onUpdate} />
     </div>
@@ -1054,7 +1066,6 @@ function ActiveView({
         title={travel.itinerary.length ? "查看今日行程" : "今天还没有行程"}
         description="旅行中可查看导航、临时调整和时间冲突提醒。"
       />
-      <ExpenseLedger travel={travel} onUpdate={onUpdate} />
       <StatusAction travel={travel} onUpdate={onUpdate} />
     </div>
   );
@@ -1069,7 +1080,6 @@ function CompletedView({
 }) {
   return (
     <div className="space-y-3">
-      <ExpenseLedger travel={travel} onUpdate={onUpdate} settlementMode />
       <EmptySection
         icon={Camera}
         title={travel.photos.length ? `${travel.photos.length} 张旅行照片` : "没有旅行照片"}
@@ -1231,6 +1241,8 @@ function createExperienceSample(): TravelItem {
       { id: "sample-member-2", name: "体验成员 B" },
     ],
     expenses: [],
+    settlements: [],
+    collaboration: null,
     photos: [],
     createdAt: "2026-07-31T00:00:00.000Z",
     updatedAt: "2026-07-31T00:00:00.000Z",
@@ -1561,6 +1573,7 @@ export function TripsTab({
   onUpdateTravel,
   onDeleteTravel,
   onRequireLogin,
+  startInTrip = false,
 }: {
   companion: CompanionProfile | null;
   travels: TravelItem[];
@@ -1569,11 +1582,14 @@ export function TripsTab({
   onTabChange: (tab: TabKey) => void;
   onSelectTravel: (id: string) => void;
   onCreateTravel: (travel: TravelItem) => void;
-  onUpdateTravel: (travel: TravelItem) => void;
+  onUpdateTravel: (travel: TravelItem, options?: { sync?: boolean; action?: string }) => void;
   onDeleteTravel: (id: string) => void;
   onRequireLogin: (reason: string, onAuthenticated?: () => void) => void;
+  startInTrip?: boolean;
 }) {
-  const [view, setView] = useState<"home" | "trip" | "create" | "sample" | "share">("home");
+  const [view, setView] = useState<"home" | "trip" | "create" | "sample" | "share" | "accounting">(
+    startInTrip ? "trip" : "home",
+  );
   const [sampleTravel, setSampleTravel] = useState<TravelItem>(createExperienceSample);
   const [shareTravelId, setShareTravelId] = useState<string | null>(null);
   const [shareReturnView, setShareReturnView] = useState<"home" | "trip">("home");
@@ -1585,7 +1601,7 @@ export function TripsTab({
   const startShare = (item: TravelItem, returnView: "home" | "trip") => {
     setShareTravelId(item.id);
     setShareReturnView(returnView);
-    onRequireLogin("分享行程到群，并在登录设备间同步后续变更", () => setView("share"));
+    onRequireLogin("创建协作旅行，让同行人在不同设备共同编辑行程和账本", () => setView("share"));
   };
 
   useEffect(() => {
@@ -1610,7 +1626,23 @@ export function TripsTab({
   }
 
   if (view === "share" && shareTravel) {
-    return <ShareTripView travel={shareTravel} onBack={() => setView(shareReturnView)} />;
+    return (
+      <CollaborationCenter
+        travel={shareTravel}
+        onReplace={(updated) => onUpdateTravel(updated, { sync: false })}
+        onBack={() => setView(shareReturnView)}
+      />
+    );
+  }
+
+  if (view === "accounting" && travel) {
+    return (
+      <AccountingCenter
+        travel={travel}
+        onUpdate={(updated) => onUpdateTravel(updated, { action: "更新了共同账本" })}
+        onBack={() => setView("trip")}
+      />
+    );
   }
 
   if (view === "create") {
@@ -1710,7 +1742,10 @@ export function TripsTab({
                       onClick={() => startShare(plannedTravel, "home")}
                       className="relative flex w-full items-center justify-center gap-1.5 border-t border-border bg-card px-4 py-3 text-[11px] font-medium text-foreground"
                     >
-                      <Share2 className="size-3.5 text-accent" /> 分享行程到群
+                      <Share2 className="size-3.5 text-accent" />
+                      {plannedTravel.collaboration
+                        ? `协作旅行 · ${plannedTravel.collaboration.members.length} 人`
+                        : "邀请同行人共同编辑"}
                     </button>
                   )}
               </Card>
@@ -1770,7 +1805,10 @@ export function TripsTab({
                       onClick={() => startShare(item, "home")}
                       className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[12px] font-medium text-foreground"
                     >
-                      <Share2 className="size-4 text-accent" /> 分享行程到群
+                      <Share2 className="size-4 text-accent" />
+                      {item.collaboration
+                        ? `协作旅行 · ${item.collaboration.members.length} 人`
+                        : "邀请同行人共同编辑"}
                     </button>
                   )}
               </Card>
@@ -1805,13 +1843,48 @@ export function TripsTab({
           <p className="mt-1 text-[11px] text-muted-foreground">
             {travel.dateText ?? "日期待确定"}
           </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setView("accounting")}
+              className="rounded-[13px] bg-surface-sunk p-3 text-left"
+            >
+              <Wallet className="size-4 text-accent" />
+              <p className="mt-2 text-[9px] text-muted-foreground">旅行预算</p>
+              <p className="mt-0.5 text-[12px] font-bold text-foreground">
+                {travel.budget === null ? "待设置" : `¥${travel.budget}`}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("accounting")}
+              className="relative rounded-[13px] bg-brand-soft p-3 text-left"
+            >
+              <CircleDollarSign className="size-4 text-accent" />
+              <p className="mt-2 text-[9px] text-muted-foreground">记账</p>
+              <p className="mt-0.5 text-[12px] font-bold text-foreground">
+                {travel.expenses.length
+                  ? `${travel.expenses.length} 笔 · ¥${travel.expenses
+                      .reduce((sum, item) => sum + item.amount, 0)
+                      .toFixed(2)
+                      .replace(/\.00$/, "")}`
+                  : "开始共同账本"}
+              </p>
+              <span className="absolute right-2 top-2 rounded-full bg-card/80 px-2 py-0.5 text-[8px] font-semibold text-accent">
+                重要
+              </span>
+            </button>
+          </div>
           {travel.destination && travel.itinerary.length > 0 && (
             <button
               type="button"
               onClick={() => startShare(travel, "trip")}
               className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[11px] font-medium text-foreground"
             >
-              <Share2 className="size-3.5 text-accent" /> 分享行程到群
+              <Share2 className="size-3.5 text-accent" />
+              {travel.collaboration
+                ? `协作旅行 · ${travel.collaboration.members.length} 人`
+                : "开启协作旅行"}
             </button>
           )}
         </Card>

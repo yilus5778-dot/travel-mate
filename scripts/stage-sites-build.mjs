@@ -9,6 +9,9 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(join(output, "server"), join(dist, "server"), { recursive: true });
 await cp(join(output, "public"), join(dist, "public"), { recursive: true });
+await mkdir(join(dist, ".openai"), { recursive: true });
+await cp(join(root, ".openai", "hosting.json"), join(dist, ".openai", "hosting.json"));
+await cp(join(root, "drizzle"), join(dist, ".openai", "drizzle"), { recursive: true });
 
 const clientAssets = await readdir(join(output, "public", "assets"));
 const clientScripts = clientAssets.filter(
