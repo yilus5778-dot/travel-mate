@@ -605,6 +605,139 @@ function ArchivedView({
   );
 }
 
+function CompanionGreeting({ companion }: { companion: CompanionProfile | null }) {
+  const companionType = companion ? COMPANIONS[companion.key] : null;
+
+  return (
+    <div className="flex items-start gap-3">
+      <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-2xl">
+        {companionType?.emoji ?? "🧳"}
+      </div>
+      <Card className="flex-1 !p-3">
+        <p className="text-[13px] leading-relaxed text-foreground/85">
+          {companion
+            ? `${companion.name}：把想法、图片或链接给我，我们一起把下一次旅行想好。`
+            : "把想法、图片或链接给我，我会先理解需求，再帮你完成旅行计划。"}
+        </p>
+      </Card>
+    </div>
+  );
+}
+
+function NewTripCard({ prominent, onClick }: { prominent: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative w-full overflow-hidden rounded-[24px] bg-primary text-left shadow-[var(--shadow-card)] transition-transform active:scale-[0.99] ${
+        prominent ? "min-h-[210px] p-5" : "min-h-[118px] p-4"
+      }`}
+    >
+      <div
+        className={`absolute rounded-full bg-card/35 ${
+          prominent ? "-right-10 -top-12 size-40" : "-right-8 -top-10 size-28"
+        }`}
+      />
+      <div
+        className={`absolute rounded-full border border-card/45 ${
+          prominent ? "bottom-5 right-8 size-16" : "-bottom-5 right-16 size-14"
+        }`}
+      />
+      <div className="relative flex h-full flex-col">
+        <div className="flex size-10 items-center justify-center rounded-[14px] bg-card/75">
+          <Plus className="size-5 text-foreground" />
+        </div>
+        <div className={prominent ? "mt-6" : "mt-3"}>
+          <p className="text-[11px] font-medium text-foreground/65">AI 旅行规划</p>
+          <h2 className={`${prominent ? "mt-1 text-[23px]" : "mt-0.5 text-[18px]"} font-bold`}>
+            新建旅行
+          </h2>
+          <p
+            className={`mt-1 max-w-[16rem] leading-relaxed text-foreground/70 ${
+              prominent ? "text-[12px]" : "text-[11px]"
+            }`}
+          >
+            随便说、随便传，先得到一份能继续修改的旅行方案。
+          </p>
+        </div>
+        {prominent && (
+          <span className="mt-auto inline-flex w-fit items-center gap-1 rounded-full bg-card/75 px-3 py-1.5 text-[11px] font-semibold text-foreground">
+            开始规划 <Sparkles className="size-3.5" />
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function RecentTrips({
+  travels,
+  compact = false,
+  onOpen,
+}: {
+  travels: TravelItem[];
+  compact?: boolean;
+  onOpen: (id: string) => void;
+}) {
+  const recent = travels
+    .filter((item) => ["completed", "archived"].includes(item.status))
+    .slice(0, 2);
+
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-[14px] font-semibold text-foreground">近期旅行</h2>
+        {!recent.length && <Tag>体验样例</Tag>}
+      </div>
+      {recent.length ? (
+        <div className="space-y-2">
+          {recent.map((item) => (
+            <button
+              type="button"
+              key={item.id}
+              onClick={() => onOpen(item.id)}
+              className="flex w-full items-center gap-3 rounded-[18px] bg-card p-3 text-left shadow-[var(--shadow-card)]"
+            >
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-[14px] bg-surface-sunk">
+                <MapPin className="size-4 text-accent" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold text-foreground">{item.title}</p>
+                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                  {item.dateText ?? "日期待确定"} · {TRAVEL_STATUS_LABELS[item.status]}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div
+          className={`flex items-center gap-3 rounded-[18px] border border-dashed border-border bg-card/70 ${
+            compact ? "p-3" : "p-4"
+          }`}
+        >
+          <div
+            className={`flex shrink-0 items-center justify-center rounded-[14px] bg-accent-soft ${
+              compact ? "size-10" : "size-12"
+            }`}
+          >
+            <MapPin className="size-4 text-accent" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="truncate text-[13px] font-semibold text-foreground">厦门三日轻旅行</p>
+              <span className="shrink-0 text-[9px] font-medium text-accent">示例</span>
+            </div>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              厦门 · 3 天 · 独立样例，不会写入你的旅行
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function TripsTab({
   companion,
   travels,
@@ -630,7 +763,8 @@ export function TripsTab({
 }) {
   const [view, setView] = useState<"home" | "trip" | "create">("home");
   const travel = travels.find((item) => item.id === activeTravelId) ?? travels[0] ?? null;
-  const companionType = companion ? COMPANIONS[companion.key] : null;
+  const plannedTravel =
+    travels.find((item) => ["active", "upcoming", "draft"].includes(item.status)) ?? travel;
 
   useEffect(() => {
     if (!travel && view === "trip") setView("home");
@@ -651,35 +785,16 @@ export function TripsTab({
   if (view === "home" && !travels.length) {
     return (
       <MiniShell title="旅程" tab={tab} onTabChange={onTabChange}>
-        <div className="flex min-h-full flex-col px-5 pb-8 pt-4">
-          <div className="flex items-start gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-2xl">
-              {companionType?.emoji ?? "🧳"}
-            </div>
-            <Card className="flex-1 !p-3">
-              <p className="text-[13px] leading-relaxed text-foreground/85">
-                {companionType
-                  ? `${companion?.name}：我们从一次真实的新旅行开始吧。`
-                  : "先创建一次新旅行，目的地和日期都可以暂时不确定。"}
-              </p>
-            </Card>
-          </div>
-          <div className="mx-auto mt-12 max-w-[17rem] text-center">
-            <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-brand-soft text-5xl">
-              🧳
-            </div>
-            <h2 className="mt-5 text-[21px] font-bold text-foreground">还没有旅行</h2>
-            <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-              随便说、随便传，AI 会先判断需求，再交付一份可继续修改的旅行方案。
-            </p>
-          </div>
-          <div className="mt-auto pt-8">
-            <PrimaryButton onClick={() => setView("create")}>
-              <span className="inline-flex items-center gap-1.5">
-                <Plus className="size-4" /> 创建我的第一次旅行
-              </span>
-            </PrimaryButton>
-          </div>
+        <div className="space-y-5 px-5 pb-8 pt-3">
+          <CompanionGreeting companion={companion} />
+          <NewTripCard prominent onClick={() => setView("create")} />
+          <RecentTrips
+            travels={travels}
+            onOpen={(id) => {
+              onSelectTravel(id);
+              setView("trip");
+            }}
+          />
         </div>
       </MiniShell>
     );
@@ -688,59 +803,133 @@ export function TripsTab({
   if (view === "home") {
     return (
       <MiniShell title="旅程" tab={tab} onTabChange={onTabChange}>
-        <div className="space-y-4 px-5 pb-8 pt-2">
-          <div className="flex items-start gap-3">
-            <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-brand-soft text-2xl">
-              {companionType?.emoji ?? "🧳"}
-            </div>
-            <Card className="flex-1 !p-3">
-              <p className="text-[13px] leading-relaxed text-foreground/85">
-                {companion
-                  ? `${companion.name}：当前是「${TRAVEL_STATUS_LABELS[travel!.status]}」状态，我只会展示这个阶段需要的内容。`
-                  : "当前旅行信息来自你的输入，未确定内容会保持空白。"}
-              </p>
-            </Card>
-          </div>
-          {travels.map((item) => (
-            <Card key={item.id}>
-              <button
-                onClick={() => {
-                  onSelectTravel(item.id);
-                  setView("trip");
-                }}
-                className="w-full text-left"
-              >
-                <div className="flex items-center justify-between">
-                  <Tag tone={item.status === "active" ? "accent" : "brand"}>
-                    {TRAVEL_STATUS_LABELS[item.status]}
-                  </Tag>
-                  <span className="text-[11px] text-muted-foreground">
-                    {item.peopleCount ? `${item.peopleCount} 人` : "人数待确定"}
-                  </span>
+        <div className="space-y-5 px-5 pb-8 pt-3">
+          <CompanionGreeting companion={companion} />
+
+          {plannedTravel && (
+            <section>
+              <div className="mb-2 flex items-center justify-between">
+                <h2 className="text-[14px] font-semibold text-foreground">计划出行</h2>
+                <Tag tone={plannedTravel.status === "active" ? "accent" : "brand"}>
+                  {TRAVEL_STATUS_LABELS[plannedTravel.status]}
+                </Tag>
+              </div>
+              <Card className="relative min-h-[228px] overflow-hidden !p-0">
+                <div className="absolute -right-14 -top-16 size-44 rounded-full bg-brand-soft" />
+                <div className="absolute right-7 top-8 flex size-16 items-center justify-center rounded-full bg-card/70">
+                  <Navigation className="size-6 text-accent" />
                 </div>
-                <h3 className="mt-3 text-[18px] font-bold text-foreground">{item.title}</h3>
-                <p className="mt-1 text-[12px] text-muted-foreground">
-                  {item.dateText ?? "日期待确定"}
-                </p>
-              </button>
-              {item.status !== "archived" &&
-                Boolean(item.destination) &&
-                item.itinerary.length > 0 &&
-                item.aiPlanStatus !== "not_started" && (
-                  <button
-                    onClick={() => onRequireLogin("邀请同行人并同步旅行变更")}
-                    className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[12px] font-medium text-foreground"
-                  >
-                    <Share2 className="size-4 text-accent" /> 邀请同行人
-                  </button>
-                )}
-            </Card>
-          ))}
-          <PrimaryButton onClick={() => setView("create")}>
-            <span className="inline-flex items-center gap-1.5">
-              <Plus className="size-4" /> 创建新旅行
-            </span>
-          </PrimaryButton>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectTravel(plannedTravel.id);
+                    setView("trip");
+                  }}
+                  className="relative flex min-h-[228px] w-full flex-col p-5 text-left"
+                >
+                  <p className="text-[11px] font-medium text-muted-foreground">
+                    {plannedTravel.destination ??
+                      plannedTravel.destinationPreference ??
+                      "目的地待确定"}
+                  </p>
+                  <h3 className="mt-1 max-w-[13rem] text-[22px] font-bold leading-snug text-foreground">
+                    {plannedTravel.title}
+                  </h3>
+                  <div className="mt-auto grid grid-cols-3 gap-2">
+                    <div className="rounded-[13px] bg-surface-sunk p-2.5">
+                      <CalendarDays className="size-3.5 text-muted-foreground" />
+                      <p className="mt-1 text-[10px] font-medium text-foreground">
+                        {plannedTravel.dateText ?? "日期待确定"}
+                      </p>
+                    </div>
+                    <div className="rounded-[13px] bg-surface-sunk p-2.5">
+                      <Users className="size-3.5 text-muted-foreground" />
+                      <p className="mt-1 text-[10px] font-medium text-foreground">
+                        {plannedTravel.peopleCount ? `${plannedTravel.peopleCount} 人` : "人数待定"}
+                      </p>
+                    </div>
+                    <div className="rounded-[13px] bg-surface-sunk p-2.5">
+                      <ClipboardList className="size-3.5 text-muted-foreground" />
+                      <p className="mt-1 text-[10px] font-medium text-foreground">
+                        {plannedTravel.itinerary.length
+                          ? `${plannedTravel.itinerary.length} 项安排`
+                          : "待生成行程"}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+                {plannedTravel.status !== "archived" &&
+                  Boolean(plannedTravel.destination) &&
+                  plannedTravel.itinerary.length > 0 &&
+                  plannedTravel.aiPlanStatus !== "not_started" && (
+                    <button
+                      onClick={() => onRequireLogin("邀请同行人并同步旅行变更")}
+                      className="relative flex w-full items-center justify-center gap-1.5 border-t border-border bg-card px-4 py-3 text-[11px] font-medium text-foreground"
+                    >
+                      <Share2 className="size-3.5 text-accent" /> 基本规划完成后邀请同行人
+                    </button>
+                  )}
+              </Card>
+            </section>
+          )}
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-[14px] font-semibold text-foreground">开始下一段旅行</h2>
+              <span className="text-[10px] text-muted-foreground">随时创建</span>
+            </div>
+            <NewTripCard prominent={false} onClick={() => setView("create")} />
+          </section>
+
+          <RecentTrips
+            compact
+            travels={travels}
+            onOpen={(id) => {
+              onSelectTravel(id);
+              setView("trip");
+            }}
+          />
+
+          {travels
+            .filter(
+              (item) =>
+                item.id !== plannedTravel?.id && !["completed", "archived"].includes(item.status),
+            )
+            .map((item) => (
+              <Card key={item.id}>
+                <button
+                  onClick={() => {
+                    onSelectTravel(item.id);
+                    setView("trip");
+                  }}
+                  className="w-full text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <Tag tone={item.status === "active" ? "accent" : "brand"}>
+                      {TRAVEL_STATUS_LABELS[item.status]}
+                    </Tag>
+                    <span className="text-[11px] text-muted-foreground">
+                      {item.peopleCount ? `${item.peopleCount} 人` : "人数待确定"}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 text-[18px] font-bold text-foreground">{item.title}</h3>
+                  <p className="mt-1 text-[12px] text-muted-foreground">
+                    {item.dateText ?? "日期待确定"}
+                  </p>
+                </button>
+                {item.status !== "archived" &&
+                  Boolean(item.destination) &&
+                  item.itinerary.length > 0 &&
+                  item.aiPlanStatus !== "not_started" && (
+                    <button
+                      onClick={() => onRequireLogin("邀请同行人并同步旅行变更")}
+                      className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[12px] font-medium text-foreground"
+                    >
+                      <Share2 className="size-4 text-accent" /> 邀请同行人
+                    </button>
+                  )}
+              </Card>
+            ))}
         </div>
       </MiniShell>
     );
