@@ -3,9 +3,11 @@ import {
   Archive,
   CalendarDays,
   Camera,
+  CarFront,
   CheckCircle2,
   ClipboardList,
   Clock3,
+  ExternalLink,
   ImageUp,
   Link2,
   MapPin,
@@ -13,6 +15,7 @@ import {
   PackageOpen,
   Plus,
   Receipt,
+  Route,
   Share2,
   Sparkles,
   Trash2,
@@ -24,6 +27,7 @@ import {
   buildSuggestedItinerary,
   TRAVEL_STATUS_LABELS,
   type CompanionProfile,
+  type ItineraryItem,
   type SourceItem,
   type TravelItem,
   type TravelStatus,
@@ -99,6 +103,291 @@ function StatusAction({
         </p>
       )}
     </div>
+  );
+}
+
+function openMapSearch(title: string, destination: string | null) {
+  const url = new URL("https://uri.amap.com/search");
+  url.searchParams.set("keyword", [destination, title].filter(Boolean).join(" "));
+  if (destination) url.searchParams.set("city", destination);
+  url.searchParams.set("view", "map");
+  url.searchParams.set("src", "travelmate");
+  url.searchParams.set("callnative", "1");
+  window.open(url.toString(), "_blank", "noopener,noreferrer");
+}
+
+function DayPlanEditor({
+  travel,
+  onPatch,
+}: {
+  travel: TravelItem;
+  onPatch: (patch: Partial<TravelItem>) => void;
+}) {
+  const itineraryDays = travel.itinerary
+    .map((item) => item.day ?? 1)
+    .filter((day) => Number.isFinite(day));
+  const dayCount = Math.min(
+    Math.max(travel.durationDays ?? 0, itineraryDays.length ? Math.max(...itineraryDays) : 0, 1),
+    7,
+  );
+  const [selectedDay, setSelectedDay] = useState(1);
+  const dayItems = travel.itinerary.filter((item) => (item.day ?? 1) === selectedDay);
+
+  useEffect(() => {
+    if (selectedDay > dayCount) setSelectedDay(dayCount);
+  }, [dayCount, selectedDay]);
+
+  const updateItem = (id: string, patch: Partial<ItineraryItem>) => {
+    onPatch({
+      itinerary: travel.itinerary.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    });
+  };
+
+  const removeItem = (id: string) => {
+    onPatch({ itinerary: travel.itinerary.filter((item) => item.id !== id) });
+  };
+
+  const addItem = () => {
+    const lastTime = dayItems.at(-1)?.time;
+    onPatch({
+      itinerary: [
+        ...travel.itinerary,
+        {
+          id: `manual-itinerary-${Date.now()}`,
+          day: selectedDay,
+          time: lastTime ?? "16:00",
+          title: "待编辑的新行程",
+          confirmed: false,
+          source: "user",
+        },
+      ],
+    });
+  };
+
+  const addDay = () => {
+    if (dayCount >= 7) return;
+    const nextDay = dayCount + 1;
+    onPatch({
+      durationDays: nextDay,
+      itinerary: [
+        ...travel.itinerary,
+        {
+          id: `manual-itinerary-${Date.now()}`,
+          day: nextDay,
+          time: "09:00",
+          title: "待编辑的新行程",
+          confirmed: false,
+          source: "user",
+        },
+      ],
+    });
+    setSelectedDay(nextDay);
+  };
+
+  const firstStop = dayItems[0] ?? null;
+  const routeItems = dayItems.slice(0, 4);
+  const routePositions = [
+    { left: "10%", top: "26%" },
+    { left: "40%", top: "58%" },
+    { left: "70%", top: "24%" },
+    { left: "82%", top: "66%" },
+  ];
+
+  return (
+    <Card className="overflow-hidden !p-0">
+      <div className="bg-brand-soft px-4 pb-4 pt-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Tag tone="accent">AI 可编辑行程</Tag>
+              <span className="text-[10px] text-muted-foreground">按天查看</span>
+            </div>
+            <h3 className="mt-3 text-[19px] font-bold text-foreground">
+              D{selectedDay} ·{" "}
+              {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
+            </h3>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {travel.dateText ?? "日期待确定"} · 第 {selectedDay} 天
+            </p>
+          </div>
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-[15px] bg-card/75">
+            <Route className="size-5 text-accent" />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-b border-border px-4 py-3">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => (
+            <button
+              type="button"
+              key={day}
+              onClick={() => setSelectedDay(day)}
+              className={`min-w-[58px] rounded-[14px] px-3 py-2.5 text-center transition-colors ${
+                selectedDay === day
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-surface-sunk text-muted-foreground"
+              }`}
+            >
+              <span className="block text-[13px] font-bold">D{day}</span>
+              <span className="mt-0.5 block text-[9px]">第 {day} 天</span>
+            </button>
+          ))}
+          {dayCount < 7 && (
+            <button
+              type="button"
+              onClick={addDay}
+              aria-label="增加一天"
+              className="flex min-w-[48px] items-center justify-center rounded-[14px] border border-dashed border-border text-muted-foreground"
+            >
+              <Plus className="size-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[13px] font-semibold text-foreground">当天时间线</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              时间和地点都可以直接修改，AI 建议不会冒充已确认信息。
+            </p>
+          </div>
+          <Tag>{dayItems.length} 站</Tag>
+        </div>
+
+        {dayItems.length ? (
+          <div className="mt-4">
+            {dayItems.map((item, index) => (
+              <div key={item.id}>
+                <div className="grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2">
+                  <input
+                    type="time"
+                    value={item.time ?? ""}
+                    onChange={(event) => updateItem(item.id, { time: event.target.value || null })}
+                    aria-label={`${item.title}的时间`}
+                    className="mt-3 w-full bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
+                  />
+                  <div className="relative flex justify-center">
+                    <span className="relative z-10 mt-4 size-2.5 rounded-full border-2 border-card bg-accent shadow-sm" />
+                    {index < dayItems.length - 1 && (
+                      <span className="absolute bottom-[-18px] top-5 w-px bg-border" />
+                    )}
+                  </div>
+                  <div className="rounded-[16px] bg-surface-sunk p-3">
+                    <div className="flex items-start gap-2">
+                      <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
+                      <input
+                        value={item.title}
+                        onChange={(event) => updateItem(item.id, { title: event.target.value })}
+                        className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-foreground outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeItem(item.id)}
+                        aria-label={`删除 ${item.title}`}
+                      >
+                        <Trash2 className="size-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <Tag tone={item.source === "ai" ? "accent" : "muted"}>
+                        {item.source === "ai" ? "AI 建议" : "用户添加"}
+                      </Tag>
+                      <button
+                        type="button"
+                        onClick={() => openMapSearch(item.title, travel.destination)}
+                        className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground"
+                      >
+                        <Navigation className="size-3 text-accent" /> 导航
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {index < dayItems.length - 1 && (
+                  <div className="ml-[74px] flex h-8 items-center gap-1.5 text-[9px] text-muted-foreground">
+                    <CarFront className="size-3" />
+                    <span>前往下一站 · 路程由地图实时计算</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-4 rounded-[14px] bg-surface-sunk p-4 text-center">
+            <p className="text-[11px] text-muted-foreground">这一天还没有安排。</p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={addItem}
+          className="mt-3 flex w-full items-center justify-center gap-1 rounded-[12px] border border-dashed border-border py-2.5 text-[11px] font-medium text-foreground"
+        >
+          <Plus className="size-3.5" /> 添加当天行程
+        </button>
+
+        <div className="mt-5">
+          <div className="mb-2 flex items-center justify-between">
+            <div>
+              <p className="text-[13px] font-semibold text-foreground">当日路线</p>
+              <p className="mt-0.5 text-[9px] text-muted-foreground">
+                地点位置由地图实时搜索确认，不使用编造坐标。
+              </p>
+            </div>
+            <Route className="size-4 text-accent" />
+          </div>
+          <div className="relative h-40 overflow-hidden rounded-[18px] bg-accent-soft">
+            <div className="absolute -left-10 top-6 h-16 w-52 rotate-12 rounded-full border-[10px] border-card/75" />
+            <div className="absolute -right-14 bottom-2 h-20 w-56 -rotate-12 rounded-full border-[10px] border-brand-soft" />
+            {routeItems.length > 1 && (
+              <>
+                <div className="absolute left-[15%] top-[39%] h-1 w-[30%] rotate-[24deg] rounded-full bg-accent/35" />
+                <div className="absolute left-[44%] top-[43%] h-1 w-[30%] -rotate-[28deg] rounded-full bg-accent/35" />
+                {routeItems.length > 3 && (
+                  <div className="absolute left-[70%] top-[46%] h-1 w-[18%] rotate-[55deg] rounded-full bg-accent/35" />
+                )}
+              </>
+            )}
+            {routeItems.map((item, index) => (
+              <div
+                key={item.id}
+                className="absolute -translate-x-1/2 -translate-y-1/2"
+                style={routePositions[index]}
+              >
+                <div className="mx-auto flex size-7 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] font-bold text-accent-foreground shadow-sm">
+                  {index + 1}
+                </div>
+                <p className="mt-1 max-w-[88px] truncate rounded-full bg-card/90 px-2 py-1 text-[8px] font-medium text-foreground shadow-sm">
+                  {item.title}
+                </p>
+              </div>
+            ))}
+            {!routeItems.length && (
+              <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                添加地点后自动形成路线
+              </div>
+            )}
+          </div>
+          <p className="mt-2 truncate text-[10px] text-muted-foreground">
+            {dayItems.length ? dayItems.map((item) => item.title).join(" → ") : "当天路线待补充"}
+          </p>
+          <button
+            type="button"
+            disabled={!firstStop}
+            onClick={() => firstStop && openMapSearch(firstStop.title, travel.destination)}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[13px] bg-accent py-3 text-[12px] font-semibold text-accent-foreground disabled:opacity-40"
+          >
+            <Navigation className="size-4" /> 从第一站开始导航
+            <ExternalLink className="size-3.5" />
+          </button>
+          <p className="mt-2 text-center text-[9px] text-muted-foreground">
+            将打开高德地图搜索第一站，后续地点可在时间线中继续导航。
+          </p>
+        </div>
+      </div>
+    </Card>
   );
 }
 
@@ -189,6 +478,20 @@ function DraftView({
           {travel.itinerary.length ? "让 AI 重新补全方案" : "直接生成行程"}
         </button>
       </Card>
+
+      {travel.itinerary.length ? (
+        <DayPlanEditor travel={travel} onPatch={patchTravel} />
+      ) : (
+        <Card className="text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-brand-soft">
+            <Route className="size-5 text-accent" />
+          </div>
+          <p className="mt-3 text-[14px] font-semibold text-foreground">还没有按天行程</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            点击上方“直接生成行程”，AI 会自动整理成按天标签、当天时间线和路线导航。
+          </p>
+        </Card>
+      )}
 
       <Card>
         <p className="text-[14px] font-semibold text-foreground">编辑基础信息</p>
@@ -293,72 +596,6 @@ function DraftView({
             </label>
           </div>
         </div>
-      </Card>
-
-      <Card>
-        <div className="flex items-center justify-between">
-          <p className="text-[14px] font-semibold text-foreground">调整行程</p>
-          <Tag>{travel.itinerary.length} 项</Tag>
-        </div>
-        {travel.itinerary.length ? (
-          <div className="mt-3 space-y-2">
-            {travel.itinerary.map((item, index) => (
-              <div
-                key={item.id}
-                className="flex items-center gap-2 rounded-[12px] bg-surface-sunk p-2"
-              >
-                <span className="w-7 shrink-0 text-center text-[10px] font-semibold text-muted-foreground">
-                  D{item.day ?? index + 1}
-                </span>
-                <input
-                  value={item.title}
-                  onChange={(event) =>
-                    patchTravel({
-                      itinerary: travel.itinerary.map((entry) =>
-                        entry.id === item.id ? { ...entry, title: event.target.value } : entry,
-                      ),
-                    })
-                  }
-                  className="min-w-0 flex-1 bg-transparent text-[11px] text-foreground outline-none"
-                />
-                <button
-                  aria-label={`删除行程 ${item.title}`}
-                  onClick={() =>
-                    patchTravel({
-                      itinerary: travel.itinerary.filter((entry) => entry.id !== item.id),
-                    })
-                  }
-                >
-                  <Trash2 className="size-3.5 text-muted-foreground" />
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 rounded-[12px] bg-surface-sunk p-3 text-center text-[11px] text-muted-foreground">
-            还没有行程，点击上方“直接生成行程”开始。
-          </p>
-        )}
-        <button
-          onClick={() =>
-            patchTravel({
-              itinerary: [
-                ...travel.itinerary,
-                {
-                  id: `manual-itinerary-${Date.now()}`,
-                  day: travel.itinerary.length + 1,
-                  time: null,
-                  title: "待编辑的新行程",
-                  confirmed: false,
-                  source: "user",
-                },
-              ],
-            })
-          }
-          className="mt-3 w-full rounded-[11px] bg-surface-sunk py-2 text-[11px] font-medium text-foreground"
-        >
-          + 添加一天
-        </button>
       </Card>
 
       <Card>
@@ -498,6 +735,18 @@ function UpcomingView({
 }) {
   return (
     <div className="space-y-3">
+      {travel.itinerary.length > 0 && (
+        <DayPlanEditor
+          travel={travel}
+          onPatch={(patch) =>
+            onUpdate({
+              ...travel,
+              ...patch,
+              updatedAt: new Date().toISOString(),
+            })
+          }
+        />
+      )}
       <EmptySection
         icon={Receipt}
         title={travel.orders.length ? `${travel.orders.length} 个订单` : "没有订单"}
@@ -531,6 +780,18 @@ function ActiveView({
 }) {
   return (
     <div className="space-y-3">
+      {travel.itinerary.length > 0 && (
+        <DayPlanEditor
+          travel={travel}
+          onPatch={(patch) =>
+            onUpdate({
+              ...travel,
+              ...patch,
+              updatedAt: new Date().toISOString(),
+            })
+          }
+        />
+      )}
       <EmptySection
         icon={Navigation}
         title={travel.itinerary.length ? "查看今日行程" : "今天还没有行程"}

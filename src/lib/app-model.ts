@@ -218,11 +218,31 @@ export function getDestinationCandidates(preference: string | null) {
   return [];
 }
 
-const ITINERARY_TEMPLATES: Record<string, string[]> = {
-  厦门: ["抵达与环岛路慢游", "鼓浪屿核心体验", "沙坡尾散步与返程"],
-  青岛: ["抵达与老城散步", "海岸线与崂山方向体验", "八大关慢游与返程"],
-  北海: ["抵达与银滩日落", "涠洲岛方向一日体验", "老街散步与返程"],
+const ITINERARY_TEMPLATES: Record<string, string[][]> = {
+  厦门: [
+    ["抵达厦门与办理入住", "环岛路慢游", "曾厝垵夜间散步"],
+    ["鼓浪屿轮渡与登岛", "鼓浪屿核心街区", "海边日落与返程"],
+    ["沙坡尾散步", "八市在地体验", "收拾行李与返程"],
+  ],
+  青岛: [
+    ["抵达青岛与办理入住", "老城街区散步", "海边夜景"],
+    ["崂山方向核心体验", "海岸线慢游", "晚间自由活动"],
+    ["八大关散步", "在地市场体验", "收拾行李与返程"],
+  ],
+  北海: [
+    ["抵达北海与办理入住", "银滩慢游", "海边日落"],
+    ["涠洲岛方向出发", "岛上核心体验", "晚间自由活动"],
+    ["北海老街散步", "在地午餐体验", "收拾行李与返程"],
+  ],
 };
+
+const GENERIC_DAY_PLANS = [
+  ["抵达与办理入住", "目的地周边轻量探索", "晚间自由活动"],
+  ["当地核心体验", "午后弹性安排", "晚餐与夜间散步"],
+  ["补充未完成体验", "伴手礼与自由活动", "收拾行李与返程"],
+];
+
+const SUGGESTED_TIMES = ["09:00", "13:30", "18:00"];
 
 export function buildSuggestedItinerary(
   destination: string | null,
@@ -230,16 +250,20 @@ export function buildSuggestedItinerary(
 ): ItineraryItem[] {
   const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
   const template = destination ? ITINERARY_TEMPLATES[destination] : undefined;
-  const generic = ["抵达、安顿与轻量探索", "核心体验与弹性安排", "自由活动与返程"];
 
-  return Array.from({ length: days }, (_, index) => ({
-    id: `ai-itinerary-${Date.now()}-${index}`,
-    day: index + 1,
-    time: null,
-    title: template?.[index] ?? generic[index] ?? `第 ${index + 1} 天 · 待继续细化`,
-    confirmed: false,
-    source: "ai" as const,
-  }));
+  return Array.from({ length: days }, (_, dayIndex) => {
+    const fallback = GENERIC_DAY_PLANS[dayIndex] ?? ["早餐与出发", "当天核心体验", "晚间自由活动"];
+    const dayPlan = template?.[dayIndex] ?? fallback;
+
+    return dayPlan.map((title, itemIndex) => ({
+      id: `ai-itinerary-${Date.now()}-${dayIndex}-${itemIndex}`,
+      day: dayIndex + 1,
+      time: SUGGESTED_TIMES[itemIndex] ?? null,
+      title,
+      confirmed: false,
+      source: "ai" as const,
+    }));
+  }).flat();
 }
 
 export function organizePastedItinerary(textValue: string): ItineraryItem[] {

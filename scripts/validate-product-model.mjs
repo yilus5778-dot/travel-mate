@@ -31,8 +31,10 @@ assert.equal(pasted.looksLikeItinerary, true);
 assert.equal(model.organizePastedItinerary("D1 抵达\nD2 海边慢游\nD3 返程").length, 3);
 
 const generated = model.buildSuggestedItinerary("厦门", 3);
-assert.equal(generated.length, 3);
+assert.equal(generated.length, 9);
 assert.ok(generated.every((item) => item.source === "ai" && !item.confirmed));
+assert.deepEqual([...new Set(generated.map((item) => item.day))], [1, 2, 3]);
+assert.ok(generated.every((item) => item.time));
 assert.equal(model.isMeaningfulIdea("123"), false);
 
 console.log("Travelmate product model validation passed.");
