@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Onboarding, type OnboardingResult } from "@/components/tm/Onboarding";
 import { TripsTab } from "@/components/tm/TripsTab";
 import { CompanionTab } from "@/components/tm/CompanionTab";
@@ -43,6 +43,7 @@ function Index() {
   const [hydrated, setHydrated] = useState(false);
   const [loginReason, setLoginReason] = useState<string | null>(null);
   const [pendingCompanion, setPendingCompanion] = useState<OnboardingResult | null>(null);
+  const pendingLoginActionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (EXPERIENCE_MODE) {
@@ -91,8 +92,12 @@ function Index() {
     }));
   };
 
-  const requestLogin = (reason: string) => {
-    if (state.auth === "authenticated") return;
+  const requestLogin = (reason: string, onAuthenticated?: () => void) => {
+    if (state.auth === "authenticated") {
+      onAuthenticated?.();
+      return;
+    }
+    pendingLoginActionRef.current = onAuthenticated ?? null;
     setLoginReason(reason);
   };
 
@@ -112,8 +117,11 @@ function Index() {
   const handleLoginConfirm = () => {
     setState((current) => ({ ...current, auth: "authenticated" }));
     if (pendingCompanion) saveCompanion(pendingCompanion);
+    const pendingAction = pendingLoginActionRef.current;
+    pendingLoginActionRef.current = null;
     setPendingCompanion(null);
     setLoginReason(null);
+    pendingAction?.();
   };
 
   const createTravel = (travel: TravelItem) => {
@@ -236,6 +244,7 @@ function Index() {
               onCancel={() => {
                 setLoginReason(null);
                 setPendingCompanion(null);
+                pendingLoginActionRef.current = null;
               }}
               onConfirm={handleLoginConfirm}
             />

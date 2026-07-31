@@ -7,6 +7,7 @@ export type TravelDateStatus = "undecided" | "approximate" | "confirmed";
 export type PlanningMode = "organize" | "plan";
 export type AIPlanStatus = "not_started" | "needs_questions" | "organized" | "generated";
 export type SourceStatus = "selected" | "uploading" | "recognizing" | "recognized" | "failed";
+export type ExpenseCategory = "food" | "transport" | "hotel" | "ticket" | "shopping" | "other";
 
 export interface SourceItem {
   id: string;
@@ -23,6 +24,15 @@ export interface ItineraryItem {
   title: string;
   confirmed: boolean;
   source: "user" | "ai";
+}
+
+export interface ExpenseItem {
+  id: string;
+  title: string;
+  amount: number;
+  category: ExpenseCategory;
+  paidBy: string;
+  createdAt: string;
 }
 
 export interface TravelItem {
@@ -47,7 +57,7 @@ export interface TravelItem {
   itinerary: ItineraryItem[];
   orders: Array<{ id: string; title: string }>;
   members: Array<{ id: string; name: string }>;
-  expenses: Array<{ id: string; title: string; amount: number }>;
+  expenses: ExpenseItem[];
   photos: Array<{ id: string; name: string }>;
   createdAt: string;
   updatedAt: string;
@@ -372,6 +382,12 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
       ...item,
       day: item.day ?? index + 1,
       source: item.source ?? "user",
+    })),
+    expenses: (travel.expenses ?? []).map((expense) => ({
+      ...expense,
+      category: expense.category ?? "other",
+      paidBy: expense.paidBy ?? "我",
+      createdAt: expense.createdAt ?? travel.updatedAt,
     })),
   };
 }

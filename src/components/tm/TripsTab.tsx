@@ -5,8 +5,10 @@ import {
   Camera,
   CarFront,
   CheckCircle2,
+  CircleDollarSign,
   ClipboardList,
   Clock3,
+  Copy,
   ExternalLink,
   ImageUp,
   Link2,
@@ -16,6 +18,7 @@ import {
   Plus,
   Receipt,
   Route,
+  Send,
   Share2,
   Sparkles,
   Trash2,
@@ -27,6 +30,7 @@ import {
   buildSuggestedItinerary,
   TRAVEL_STATUS_LABELS,
   type CompanionProfile,
+  type ExpenseCategory,
   type ItineraryItem,
   type SourceItem,
   type TravelItem,
@@ -55,6 +59,254 @@ function EmptySection({
       </div>
       <p className="mt-2 text-[13px] font-semibold text-foreground">{title}</p>
       <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{description}</p>
+    </Card>
+  );
+}
+
+const EXPENSE_CATEGORIES: Array<{
+  value: ExpenseCategory;
+  label: string;
+  emoji: string;
+}> = [
+  { value: "food", label: "餐饮", emoji: "🍜" },
+  { value: "transport", label: "交通", emoji: "🚕" },
+  { value: "hotel", label: "住宿", emoji: "🏨" },
+  { value: "ticket", label: "门票", emoji: "🎫" },
+  { value: "shopping", label: "购物", emoji: "🛍️" },
+  { value: "other", label: "其他", emoji: "🧾" },
+];
+
+function formatMoney(value: number) {
+  return `¥${value.toFixed(2).replace(/\.00$/, "")}`;
+}
+
+function ExpenseLedger({
+  travel,
+  onUpdate,
+  settlementMode = false,
+}: {
+  travel: TravelItem;
+  onUpdate: (travel: TravelItem) => void;
+  settlementMode?: boolean;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState<ExpenseCategory>("food");
+  const [paidBy, setPaidBy] = useState("我");
+  const [formError, setFormError] = useState("");
+  const total = travel.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const peopleCount = Math.max(travel.peopleCount ?? travel.members.length + 1, 1);
+  const average = total / peopleCount;
+  const payerOptions = ["我", ...travel.members.map((member) => member.name)].filter(
+    (name, index, values) => values.indexOf(name) === index,
+  );
+
+  const addExpense = () => {
+    const numericAmount = Number(amount);
+    if (!title.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0) {
+      setFormError("请填写消费名称和大于 0 的金额");
+      return;
+    }
+    onUpdate({
+      ...travel,
+      expenses: [
+        {
+          id: `expense-${Date.now()}`,
+          title: title.trim(),
+          amount: numericAmount,
+          category,
+          paidBy,
+          createdAt: new Date().toISOString(),
+        },
+        ...travel.expenses,
+      ],
+      updatedAt: new Date().toISOString(),
+    });
+    setTitle("");
+    setAmount("");
+    setCategory("food");
+    setPaidBy("我");
+    setFormError("");
+    setShowForm(false);
+  };
+
+  return (
+    <Card>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <CircleDollarSign className="size-4 text-accent" />
+            <p className="text-[14px] font-semibold text-foreground">
+              {settlementMode ? "费用与 AA 结算" : "旅行记账"}
+            </p>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            只统计你真实记录的消费，不自动生成金额。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowForm((current) => !current)}
+          className="rounded-full bg-brand-soft px-3 py-1.5 text-[10px] font-semibold text-foreground"
+        >
+          {showForm ? "收起" : settlementMode ? "补记一笔" : "+ 记一笔"}
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        <div className="rounded-[13px] bg-surface-sunk p-2.5">
+          <p className="text-[9px] text-muted-foreground">总支出</p>
+          <p className="mt-1 text-[14px] font-bold text-foreground">{formatMoney(total)}</p>
+        </div>
+        <div className="rounded-[13px] bg-surface-sunk p-2.5">
+          <p className="text-[9px] text-muted-foreground">参与人数</p>
+          <p className="mt-1 text-[14px] font-bold text-foreground">{peopleCount} 人</p>
+        </div>
+        <div className="rounded-[13px] bg-accent-soft p-2.5">
+          <p className="text-[9px] text-muted-foreground">暂定人均</p>
+          <p className="mt-1 text-[14px] font-bold text-accent">{formatMoney(average)}</p>
+        </div>
+      </div>
+
+      {travel.budget && (
+        <div className="mt-3 rounded-[12px] bg-brand-soft p-3">
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="text-muted-foreground">旅行预算</span>
+            <span className="font-medium text-foreground">
+              已用 {formatMoney(total)} / {formatMoney(travel.budget)}
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-card/70">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${Math.min((total / travel.budget) * 100, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="mt-4 space-y-3 rounded-[16px] border border-border p-3">
+          <div className="grid grid-cols-[1fr_92px] gap-2">
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="例如：午餐"
+              className="min-w-0 rounded-[11px] bg-surface-sunk px-3 py-2.5 text-[11px] outline-none"
+            />
+            <div className="flex items-center rounded-[11px] bg-surface-sunk px-2">
+              <span className="text-[11px] text-muted-foreground">¥</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="0"
+                className="min-w-0 flex-1 bg-transparent px-1 py-2.5 text-[11px] outline-none"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {EXPENSE_CATEGORIES.map((item) => (
+              <button
+                type="button"
+                key={item.value}
+                onClick={() => setCategory(item.value)}
+                className={`rounded-[10px] py-2 text-[10px] ${
+                  category === item.value
+                    ? "bg-brand-soft font-semibold text-foreground"
+                    : "bg-surface-sunk text-muted-foreground"
+                }`}
+              >
+                {item.emoji} {item.label}
+              </button>
+            ))}
+          </div>
+          <label className="block">
+            <span className="text-[9px] text-muted-foreground">谁先支付</span>
+            <select
+              value={paidBy}
+              onChange={(event) => setPaidBy(event.target.value)}
+              className="mt-1 w-full rounded-[11px] bg-surface-sunk px-3 py-2 text-[11px] outline-none"
+            >
+              {payerOptions.map((payer) => (
+                <option key={payer}>{payer}</option>
+              ))}
+            </select>
+          </label>
+          {formError && <p className="text-[10px] text-destructive">{formError}</p>}
+          <button
+            type="button"
+            onClick={addExpense}
+            className="w-full rounded-[11px] bg-primary py-2.5 text-[11px] font-semibold text-primary-foreground"
+          >
+            保存这笔消费
+          </button>
+        </div>
+      )}
+
+      {travel.expenses.length ? (
+        <div className="mt-4 space-y-2">
+          {travel.expenses.map((expense) => {
+            const categoryMeta =
+              EXPENSE_CATEGORIES.find((item) => item.value === expense.category) ??
+              EXPENSE_CATEGORIES.at(-1)!;
+            return (
+              <div
+                key={expense.id}
+                className="flex items-center gap-3 rounded-[13px] bg-surface-sunk p-3"
+              >
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-[11px] bg-card text-base">
+                  {categoryMeta.emoji}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-semibold text-foreground">
+                    {expense.title}
+                  </p>
+                  <p className="mt-0.5 text-[9px] text-muted-foreground">
+                    {categoryMeta.label} · {expense.paidBy}支付
+                  </p>
+                </div>
+                <p className="text-[12px] font-bold text-foreground">
+                  {formatMoney(expense.amount)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdate({
+                      ...travel,
+                      expenses: travel.expenses.filter((item) => item.id !== expense.id),
+                      updatedAt: new Date().toISOString(),
+                    })
+                  }
+                  aria-label={`删除消费 ${expense.title}`}
+                >
+                  <Trash2 className="size-3.5 text-muted-foreground" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-[13px] bg-surface-sunk p-4 text-center">
+          <p className="text-[11px] font-medium text-foreground">还没有费用记录</p>
+          <p className="mt-1 text-[9px] text-muted-foreground">
+            记录第一笔真实消费后，系统才会计算总额和人均。
+          </p>
+        </div>
+      )}
+
+      {settlementMode && total > 0 && (
+        <div className="mt-4 rounded-[13px] border border-accent/25 bg-accent-soft p-3">
+          <p className="text-[11px] font-semibold text-foreground">AA 结算建议</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+            当前按 {peopleCount} 人平均分摊，每人暂定 {formatMoney(average)}
+            。添加真实同行人和付款人后，可继续计算应收应付。
+          </p>
+        </div>
+      )}
     </Card>
   );
 }
@@ -766,6 +1018,11 @@ function UpcomingView({
         title={travel.members.length ? `${travel.members.length} 位同行人` : "没有同行人"}
         description="邀请同行人后，成员和权限会出现在这里。"
       />
+      <EmptySection
+        icon={CircleDollarSign}
+        title="记账将在旅行中开启"
+        description="开始旅行后可以分类记录真实消费，结束后自动进入 AA 结算。"
+      />
       <StatusAction travel={travel} onUpdate={onUpdate} />
     </div>
   );
@@ -797,11 +1054,7 @@ function ActiveView({
         title={travel.itinerary.length ? "查看今日行程" : "今天还没有行程"}
         description="旅行中可查看导航、临时调整和时间冲突提醒。"
       />
-      <EmptySection
-        icon={Wallet}
-        title={travel.expenses.length ? `${travel.expenses.length} 笔费用` : "没有费用记录"}
-        description="记录真实消费后再进行记账，不会自动生成金额。"
-      />
+      <ExpenseLedger travel={travel} onUpdate={onUpdate} />
       <StatusAction travel={travel} onUpdate={onUpdate} />
     </div>
   );
@@ -816,11 +1069,7 @@ function CompletedView({
 }) {
   return (
     <div className="space-y-3">
-      <EmptySection
-        icon={Receipt}
-        title={travel.expenses.length ? "查看费用与 AA 结算" : "没有费用记录"}
-        description="只有真实记录过的费用才会参与结算。"
-      />
+      <ExpenseLedger travel={travel} onUpdate={onUpdate} settlementMode />
       <EmptySection
         icon={Camera}
         title={travel.photos.length ? `${travel.photos.length} 张旅行照片` : "没有旅行照片"}
@@ -1068,6 +1317,169 @@ function ExperienceSampleView({
   );
 }
 
+function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
+  const lines = [
+    `【travelmate 行程】${travel.title}`,
+    `目的地：${travel.destination ?? "待确定"}`,
+    `日期：${travel.dateText ?? "待确定"}`,
+    `人数：${travel.peopleCount ? `${travel.peopleCount} 人` : "待确定"}`,
+  ];
+
+  if (includeDailyPlan) {
+    const dayCount = Math.max(
+      travel.durationDays ?? 0,
+      ...travel.itinerary.map((item) => item.day ?? 1),
+      1,
+    );
+    for (let day = 1; day <= dayCount; day += 1) {
+      const dayItems = travel.itinerary.filter((item) => (item.day ?? 1) === day);
+      if (!dayItems.length) continue;
+      lines.push("", `D${day}`);
+      dayItems.forEach((item) => {
+        lines.push(
+          `${item.time ?? "时间待定"} · ${item.title}${item.confirmed ? "" : "（待确认）"}`,
+        );
+      });
+    }
+  }
+
+  lines.push("", "由 travelmate 整理 · 未包含费用、个人记忆和订单金额");
+  return lines.join("\n");
+}
+
+function ShareTripView({ travel, onBack }: { travel: TravelItem; onBack: () => void }) {
+  const [includeDailyPlan, setIncludeDailyPlan] = useState(true);
+  const [shareStatus, setShareStatus] = useState("");
+  const shareText = buildGroupShareText(travel, includeDailyPlan);
+
+  const copyShareText = async () => {
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setShareStatus("行程内容已复制，可以直接粘贴到微信群。");
+    } catch {
+      setShareStatus("当前浏览器无法自动复制，请长按下方内容手动复制。");
+    }
+  };
+
+  const shareToGroup = async () => {
+    if (!navigator.share) {
+      await copyShareText();
+      return;
+    }
+    try {
+      await navigator.share({
+        title: travel.title,
+        text: shareText,
+      });
+      setShareStatus("分享面板已完成操作。");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setShareStatus("已取消分享，行程内容没有发送。");
+        return;
+      }
+      await copyShareText();
+    }
+  };
+
+  return (
+    <MiniShell title="分享行程到群" onBack={onBack} showTabBar={false}>
+      <div className="space-y-4 px-5 pb-8 pt-2">
+        <Card className="relative overflow-hidden bg-brand-soft">
+          <div className="absolute -right-12 -top-16 size-44 rounded-full bg-card/45" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <Tag tone="accent">群分享卡片</Tag>
+              <span className="text-[9px] text-muted-foreground">已登录</span>
+            </div>
+            <p className="mt-4 text-[11px] text-muted-foreground">
+              {travel.destination ?? "目的地待确定"}
+            </p>
+            <h2 className="mt-1 text-[22px] font-bold text-foreground">{travel.title}</h2>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-[12px] bg-card/75 p-2.5">
+                <CalendarDays className="size-3.5 text-muted-foreground" />
+                <p className="mt-1 text-[9px] font-medium text-foreground">
+                  {travel.dateText ?? "日期待定"}
+                </p>
+              </div>
+              <div className="rounded-[12px] bg-card/75 p-2.5">
+                <Clock3 className="size-3.5 text-muted-foreground" />
+                <p className="mt-1 text-[9px] font-medium text-foreground">
+                  {travel.durationDays ? `${travel.durationDays} 天` : "天数待定"}
+                </p>
+              </div>
+              <div className="rounded-[12px] bg-card/75 p-2.5">
+                <Users className="size-3.5 text-muted-foreground" />
+                <p className="mt-1 text-[9px] font-medium text-foreground">
+                  {travel.peopleCount ? `${travel.peopleCount} 人` : "人数待定"}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <p className="text-[13px] font-semibold text-foreground">选择群里能看到的内容</p>
+          <label className="mt-3 flex items-start gap-3 rounded-[13px] bg-surface-sunk p-3">
+            <input
+              type="checkbox"
+              checked={includeDailyPlan}
+              onChange={(event) => setIncludeDailyPlan(event.target.checked)}
+              className="mt-0.5 size-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block text-[11px] font-medium text-foreground">包含每天的安排</span>
+              <span className="mt-1 block text-[9px] leading-relaxed text-muted-foreground">
+                未确认的时间和地点会明确标注“待确认”。
+              </span>
+            </span>
+          </label>
+          <div className="mt-3 rounded-[13px] border border-accent/20 bg-accent-soft p-3">
+            <p className="text-[10px] font-medium text-foreground">默认不分享</p>
+            <p className="mt-1 text-[9px] leading-relaxed text-muted-foreground">
+              费用记录、个人记忆、订单金额和未加入群的成员信息。
+            </p>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] font-semibold text-foreground">群分享内容预览</p>
+            <Tag>{shareText.length} 字</Tag>
+          </div>
+          <textarea
+            readOnly
+            value={shareText}
+            rows={10}
+            className="mt-3 w-full resize-none rounded-[13px] bg-surface-sunk p-3 text-[10px] leading-relaxed text-foreground outline-none"
+          />
+        </Card>
+
+        <PrimaryButton onClick={() => void shareToGroup()}>
+          <span className="inline-flex items-center gap-1.5">
+            <Send className="size-4" /> 打开分享面板
+          </span>
+        </PrimaryButton>
+        <button
+          type="button"
+          onClick={() => void copyShareText()}
+          className="flex w-full items-center justify-center gap-1.5 rounded-[13px] bg-card py-3 text-[12px] font-medium text-foreground shadow-[var(--shadow-card)]"
+        >
+          <Copy className="size-4 text-accent" /> 复制后粘贴到微信群
+        </button>
+        {shareStatus && (
+          <p className="rounded-[12px] bg-accent-soft px-3 py-2 text-center text-[10px] text-foreground">
+            {shareStatus}
+          </p>
+        )}
+        <p className="text-center text-[9px] leading-relaxed text-muted-foreground">
+          移动端打开分享面板后，选择微信并发送到目标群聊。
+        </p>
+      </div>
+    </MiniShell>
+  );
+}
+
 function RecentTrips({
   travels,
   compact = false,
@@ -1159,13 +1571,22 @@ export function TripsTab({
   onCreateTravel: (travel: TravelItem) => void;
   onUpdateTravel: (travel: TravelItem) => void;
   onDeleteTravel: (id: string) => void;
-  onRequireLogin: (reason: string) => void;
+  onRequireLogin: (reason: string, onAuthenticated?: () => void) => void;
 }) {
-  const [view, setView] = useState<"home" | "trip" | "create" | "sample">("home");
+  const [view, setView] = useState<"home" | "trip" | "create" | "sample" | "share">("home");
   const [sampleTravel, setSampleTravel] = useState<TravelItem>(createExperienceSample);
+  const [shareTravelId, setShareTravelId] = useState<string | null>(null);
+  const [shareReturnView, setShareReturnView] = useState<"home" | "trip">("home");
   const travel = travels.find((item) => item.id === activeTravelId) ?? travels[0] ?? null;
+  const shareTravel = travels.find((item) => item.id === shareTravelId) ?? null;
   const plannedTravel =
     travels.find((item) => ["active", "upcoming", "draft"].includes(item.status)) ?? travel;
+
+  const startShare = (item: TravelItem, returnView: "home" | "trip") => {
+    setShareTravelId(item.id);
+    setShareReturnView(returnView);
+    onRequireLogin("分享行程到群，并在登录设备间同步后续变更", () => setView("share"));
+  };
 
   useEffect(() => {
     if (!travel && view === "trip") setView("home");
@@ -1186,6 +1607,10 @@ export function TripsTab({
         }
       />
     );
+  }
+
+  if (view === "share" && shareTravel) {
+    return <ShareTripView travel={shareTravel} onBack={() => setView(shareReturnView)} />;
   }
 
   if (view === "create") {
@@ -1282,10 +1707,10 @@ export function TripsTab({
                   plannedTravel.itinerary.length > 0 &&
                   plannedTravel.aiPlanStatus !== "not_started" && (
                     <button
-                      onClick={() => onRequireLogin("邀请同行人并同步旅行变更")}
+                      onClick={() => startShare(plannedTravel, "home")}
                       className="relative flex w-full items-center justify-center gap-1.5 border-t border-border bg-card px-4 py-3 text-[11px] font-medium text-foreground"
                     >
-                      <Share2 className="size-3.5 text-accent" /> 基本规划完成后邀请同行人
+                      <Share2 className="size-3.5 text-accent" /> 分享行程到群
                     </button>
                   )}
               </Card>
@@ -1342,10 +1767,10 @@ export function TripsTab({
                   item.itinerary.length > 0 &&
                   item.aiPlanStatus !== "not_started" && (
                     <button
-                      onClick={() => onRequireLogin("邀请同行人并同步旅行变更")}
+                      onClick={() => startShare(item, "home")}
                       className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[12px] font-medium text-foreground"
                     >
-                      <Share2 className="size-4 text-accent" /> 邀请同行人
+                      <Share2 className="size-4 text-accent" /> 分享行程到群
                     </button>
                   )}
               </Card>
@@ -1380,6 +1805,15 @@ export function TripsTab({
           <p className="mt-1 text-[11px] text-muted-foreground">
             {travel.dateText ?? "日期待确定"}
           </p>
+          {travel.destination && travel.itinerary.length > 0 && (
+            <button
+              type="button"
+              onClick={() => startShare(travel, "trip")}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[11px] font-medium text-foreground"
+            >
+              <Share2 className="size-3.5 text-accent" /> 分享行程到群
+            </button>
+          )}
         </Card>
         {travel.status === "draft" && (
           <DraftView
