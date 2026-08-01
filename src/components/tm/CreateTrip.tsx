@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
+  Camera,
   Check,
   Clock3,
   FileSearch,
@@ -52,6 +53,45 @@ function evidenceMeta(
   if (finalEvidence === "queried") return { label: "已查询", tone: "accent" };
   if (finalEvidence === "needs_check") return { label: "需确认", tone: "muted" };
   return { label: "AI 建议", tone: "accent" };
+}
+
+function stopVisualMeta(title: string, destination: string | null) {
+  const text = `${destination ?? ""}${title}`;
+  if (/云冈|石窟|华严|善化|九龙|古城|寺|塔|博物馆|城墙/.test(text)) {
+    return { emoji: "🏛️", label: "古建与历史", tone: "from-[#eadcc8] via-[#f8f0df] to-[#caa77a]" };
+  }
+  if (/洱海|银滩|海|岛|鼓浪屿|码头|沙滩|小麦岛|栈桥|五四/.test(text)) {
+    return { emoji: "🌊", label: "海边风景", tone: "from-[#d8edf0] via-[#f8f4e7] to-[#a7cbd1]" };
+  }
+  if (/恒山|悬空|崂山|山|公园|生态|廊道/.test(text)) {
+    return { emoji: "⛰️", label: "自然路线", tone: "from-[#dfead2] via-[#f7f1df] to-[#abc58f]" };
+  }
+  if (/街|市场|八市|鼓楼|中山路|台东|侨港|人民路|老街|晚餐/.test(text)) {
+    return { emoji: "🍜", label: "街区与美食", tone: "from-[#f2dfc8] via-[#fff4df] to-[#d9b58a]" };
+  }
+  return { emoji: "🧭", label: "行程图片", tone: "from-[#eee7d9] via-[#faf4e9] to-[#d9c9ad]" };
+}
+
+function StopImageCard({ title, destination }: { title: string; destination: string | null }) {
+  const visual = stopVisualMeta(title, destination);
+  return (
+    <div
+      role="img"
+      aria-label={`${title} 图片`}
+      className={`relative mb-2 h-20 overflow-hidden rounded-[13px] bg-gradient-to-br ${visual.tone}`}
+    >
+      <div className="absolute -right-7 -top-9 size-24 rounded-full bg-card/45" />
+      <div className="absolute -bottom-9 left-8 h-16 w-36 -rotate-6 rounded-full border-[8px] border-card/35" />
+      <div className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[8px] font-medium text-muted-foreground">
+        <Camera className="size-3" />
+        图片
+      </div>
+      <div className="absolute bottom-2.5 left-2.5 right-2.5">
+        <p className="text-[16px] leading-none">{visual.emoji}</p>
+        <p className="mt-1 truncate text-[10px] font-semibold text-foreground">{visual.label}</p>
+      </div>
+    </div>
+  );
 }
 
 export function CreateTrip({
@@ -543,6 +583,7 @@ export function CreateTrip({
                     const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
                     return (
                       <div key={item.id} className="rounded-[14px] bg-surface-sunk p-3">
+                        <StopImageCard title={item.title} destination={destination || null} />
                         <div className="flex items-center gap-2">
                           <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
                             D{item.day ?? index + 1}
@@ -584,7 +625,7 @@ export function CreateTrip({
                           />
                           {item.reason && (
                             <p className="mt-1 rounded-[10px] bg-card/50 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
-                              为什么这样排：{item.reason}
+                              推荐理由：{item.reason}
                             </p>
                           )}
                           {Boolean(item.checks?.length) && (

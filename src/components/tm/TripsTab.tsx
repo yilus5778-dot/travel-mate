@@ -23,6 +23,7 @@ import {
   Sparkles,
   Trash2,
   Users,
+  Utensils,
   Wallet,
 } from "lucide-react";
 import { COMPANIONS } from "@/lib/travelmate-data";
@@ -71,6 +72,214 @@ function dayIntensityLabel(itemCount: number) {
   if (itemCount <= 2) return "轻松";
   if (itemCount === 3) return "舒适";
   return "偏满";
+}
+
+function stopVisualMeta(title: string, destination: string | null) {
+  const text = `${destination ?? ""}${title}`;
+  if (/云冈|石窟|华严|善化|九龙|古城|寺|塔|博物馆|城墙/.test(text)) {
+    return { emoji: "🏛️", label: "古建与历史", tone: "from-[#eadcc8] via-[#f8f0df] to-[#caa77a]" };
+  }
+  if (/洱海|银滩|海|岛|鼓浪屿|码头|沙滩|小麦岛|栈桥|五四/.test(text)) {
+    return { emoji: "🌊", label: "海边风景", tone: "from-[#d8edf0] via-[#f8f4e7] to-[#a7cbd1]" };
+  }
+  if (/恒山|悬空|崂山|山|公园|生态|廊道/.test(text)) {
+    return { emoji: "⛰️", label: "自然路线", tone: "from-[#dfead2] via-[#f7f1df] to-[#abc58f]" };
+  }
+  if (/街|市场|八市|鼓楼|中山路|台东|侨港|人民路|老街|晚餐/.test(text)) {
+    return { emoji: "🍜", label: "街区与美食", tone: "from-[#f2dfc8] via-[#fff4df] to-[#d9b58a]" };
+  }
+  return { emoji: "🧭", label: "行程图片", tone: "from-[#eee7d9] via-[#faf4e9] to-[#d9c9ad]" };
+}
+
+function StopImageCard({
+  title,
+  destination,
+  compact = false,
+}: {
+  title: string;
+  destination: string | null;
+  compact?: boolean;
+}) {
+  const visual = stopVisualMeta(title, destination);
+  return (
+    <div
+      role="img"
+      aria-label={`${title} 图片`}
+      className={`relative overflow-hidden rounded-[14px] bg-gradient-to-br ${visual.tone} ${
+        compact ? "mb-2 h-20" : "mb-3 h-24"
+      }`}
+    >
+      <div className="absolute -right-8 -top-10 size-28 rounded-full bg-card/45" />
+      <div className="absolute -bottom-10 left-8 h-20 w-44 -rotate-6 rounded-full border-[10px] border-card/35" />
+      <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
+        <Camera className="size-3" />
+        图片
+      </div>
+      <div className="absolute bottom-3 left-3 right-3">
+        <p className="text-[18px] leading-none">{visual.emoji}</p>
+        <p className="mt-1 truncate text-[11px] font-semibold text-foreground">{visual.label}</p>
+      </div>
+    </div>
+  );
+}
+
+interface DailyFoodRecommendation {
+  area: string;
+  dishes: string[];
+  timing: string;
+  reason: string;
+}
+
+const DAILY_FOOD_RECOMMENDATIONS: Record<string, DailyFoodRecommendation[]> = {
+  大同: [
+    {
+      area: "鼓楼东西街 / 古城内",
+      dishes: ["刀削面", "烧麦", "浑源凉粉"],
+      timing: "晚餐",
+      reason: "第一天活动集中在古城内，晚餐放在鼓楼东西街最顺路。",
+    },
+    {
+      area: "古城或博物馆周边",
+      dishes: ["羊杂", "过油肉", "黄米凉糕"],
+      timing: "午餐或晚餐",
+      reason: "云冈返城后不再远找餐厅，选回城路线附近更稳。",
+    },
+    {
+      area: "浑源县城 / 返城路上",
+      dishes: ["浑源凉粉", "莜面", "山西面食"],
+      timing: "午餐",
+      reason: "悬空寺和恒山都在浑源方向，午餐放在浑源更少折返。",
+    },
+  ],
+  厦门: [
+    {
+      area: "中山路 / 八市周边",
+      dishes: ["沙茶面", "花生汤", "海蛎煎"],
+      timing: "晚餐",
+      reason: "到达日住中山路或沙坡尾附近，晚餐放在中山路最省体力。",
+    },
+    {
+      area: "鼓浪屿龙头路",
+      dishes: ["鱼丸汤", "馅饼", "烧仙草"],
+      timing: "午餐",
+      reason: "登岛后主要步行，午餐放在龙头路方便补给。",
+    },
+    {
+      area: "八市",
+      dishes: ["沙茶面", "海鲜小吃", "花生汤"],
+      timing: "午餐",
+      reason: "返程前把午餐和伴手礼合并，减少最后一天折返。",
+    },
+  ],
+  青岛: [
+    {
+      area: "老城 / 栈桥附近",
+      dishes: ["海鲜水饺", "锅贴", "啤酒小吃"],
+      timing: "晚餐",
+      reason: "老城步行线结束后就近吃饭，不再跨区。",
+    },
+    {
+      area: "台东步行街",
+      dishes: ["海鲜烧烤", "啤酒", "小吃"],
+      timing: "晚餐",
+      reason: "崂山返程后需要选择多、收尾方便的餐区。",
+    },
+    {
+      area: "大学路 / 老城咖啡街区",
+      dishes: ["咖啡甜点", "轻食", "海鲜面"],
+      timing: "午餐",
+      reason: "返程日前半天不宜吃太远，轻餐区更适合控节奏。",
+    },
+  ],
+  北海: [
+    {
+      area: "侨港风情街",
+      dishes: ["海鲜", "糖水", "越南小吃"],
+      timing: "晚餐",
+      reason: "银滩结束后去侨港吃饭顺路，选择也集中。",
+    },
+    {
+      area: "涠洲岛南湾街",
+      dishes: ["海鲜粉", "香蕉猪", "糖水"],
+      timing: "晚餐",
+      reason: "岛上行程结束后在南湾街吃饭，避免夜间多移动。",
+    },
+    {
+      area: "北海老街",
+      dishes: ["虾饼", "糖水", "海鲜粉"],
+      timing: "早午餐",
+      reason: "老街适合返程前慢吃慢逛，把吃饭和伴手礼合并。",
+    },
+  ],
+  大理: [
+    {
+      area: "大理古城人民路",
+      dishes: ["乳扇", "饵丝", "菌子火锅"],
+      timing: "晚餐",
+      reason: "第一天不做远距离移动，古城内晚餐和夜逛最顺。",
+    },
+    {
+      area: "喜洲古镇",
+      dishes: ["喜洲粑粑", "凉鸡米线", "鲜花饼"],
+      timing: "午餐",
+      reason: "第二天路线到喜洲，午餐放在古镇比回古城更省时间。",
+    },
+    {
+      area: "大理古城",
+      dishes: ["饵块", "酸辣鱼", "咖啡甜点"],
+      timing: "午餐",
+      reason: "返程前把午餐、伴手礼和取行李放在同一区域。",
+    },
+  ],
+};
+
+function getDailyFoodRecommendation(
+  destination: string | null,
+  day: number,
+): DailyFoodRecommendation {
+  const recommendations = destination ? DAILY_FOOD_RECOMMENDATIONS[destination] : undefined;
+  return (
+    recommendations?.[day - 1] ??
+    recommendations?.at(-1) ?? {
+      area: "当天路线附近",
+      dishes: ["当地特色菜", "轻食补给", "方便打包的小吃"],
+      timing: day === 1 ? "晚餐" : "午餐",
+      reason: "美食建议跟随当天路线放置，避免为了吃饭额外折返。",
+    }
+  );
+}
+
+function DailyFoodCard({ destination, day }: { destination: string | null; day: number }) {
+  const food = getDailyFoodRecommendation(destination, day);
+  return (
+    <div className="mt-3 rounded-[16px] bg-card/80 p-3 shadow-[var(--shadow-card)]">
+      <div className="flex items-start gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-brand-soft">
+          <Utensils className="size-4 text-foreground" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[12px] font-semibold text-foreground">今日美食</p>
+            <Tag tone="accent">{food.timing}</Tag>
+          </div>
+          <p className="mt-1 text-[11px] font-medium text-foreground">{food.area}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {food.dishes.map((dish) => (
+              <span
+                key={dish}
+                className="rounded-full bg-surface-sunk px-2 py-1 text-[9px] text-muted-foreground"
+              >
+                {dish}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            推荐理由：{food.reason}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function EmptySection({
@@ -584,6 +793,8 @@ function DayPlanEditor({
           </p>
         </div>
 
+        <DailyFoodCard destination={travel.destination} day={selectedDay} />
+
         {dayItems.length ? (
           <div className="mt-4">
             {dayItems.map((item, index) => {
@@ -607,6 +818,7 @@ function DayPlanEditor({
                       )}
                     </div>
                     <div className="rounded-[16px] bg-surface-sunk p-3">
+                      <StopImageCard title={item.title} destination={travel.destination} />
                       <div className="flex items-start gap-2">
                         <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
                         <input
@@ -646,7 +858,7 @@ function DayPlanEditor({
                       />
                       {item.reason && (
                         <div className="mt-2 rounded-[10px] bg-card/55 px-2.5 py-2">
-                          <p className="text-[9px] font-semibold text-foreground">为什么这样排</p>
+                          <p className="text-[9px] font-semibold text-foreground">推荐理由</p>
                           <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
                             {item.reason}
                           </p>
@@ -1497,12 +1709,15 @@ function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
       const dayItems = travel.itinerary.filter((item) => (item.day ?? 1) === day);
       if (!dayItems.length) continue;
       lines.push("", `D${day}`);
+      const food = getDailyFoodRecommendation(travel.destination, day);
+      lines.push(`美食：${food.area} · ${food.dishes.join(" / ")}（${food.timing}）`);
+      lines.push(`  推荐理由：${food.reason}`);
       dayItems.forEach((item) => {
         const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
         const duration = item.duration ? ` · ${item.duration}` : "";
         lines.push(`${item.time ?? "时间未定"} · ${item.title}${duration} · ${meta.label}`);
         if (item.detail) lines.push(`  ${item.detail}`);
-        if (item.reason) lines.push(`  为什么这样排：${item.reason}`);
+        if (item.reason) lines.push(`  推荐理由：${item.reason}`);
         if (item.transportToNext) lines.push(`  下一站：${item.transportToNext}`);
         (item.checks ?? []).forEach((check) => lines.push(`  需确认：${check}`));
       });
