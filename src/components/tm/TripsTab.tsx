@@ -322,15 +322,6 @@ function ExpenseLedger({
   );
 }
 
-function draftMissingLabels(travel: TravelItem) {
-  return [
-    !travel.destination ? "目的地" : null,
-    !travel.dateText || travel.dateStatus !== "confirmed" ? "已确认日期" : null,
-    !travel.peopleCount ? "人数" : null,
-    travel.itinerary.length === 0 ? "基础行程" : null,
-  ].filter(Boolean) as string[];
-}
-
 function StatusAction({
   travel,
   onUpdate,
@@ -347,36 +338,19 @@ function StatusAction({
   const action = next[travel.status];
   if (!action) return null;
 
-  const draftMissing = travel.status === "draft" ? draftMissingLabels(travel) : [];
-  const draftIncomplete = draftMissing.length > 0;
-
   return (
     <div>
       <PrimaryButton
-        disabled={draftIncomplete}
         onClick={() =>
           onUpdate({
             ...travel,
             status: action.status,
-            dateStatus:
-              travel.status === "draft" && action.status === "upcoming"
-                ? "confirmed"
-                : travel.dateStatus,
-            itinerary:
-              travel.status === "draft" && action.status === "upcoming"
-                ? travel.itinerary.map((item) => ({ ...item, confirmed: true }))
-                : travel.itinerary,
             updatedAt: new Date().toISOString(),
           })
         }
       >
         {action.label}
       </PrimaryButton>
-      {draftIncomplete && (
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          还差：{draftMissing.join("、")}
-        </p>
-      )}
     </div>
   );
 }
