@@ -847,15 +847,6 @@ function DayPlanEditor({
                           />
                         </label>
                       </div>
-                      <textarea
-                        value={item.detail ?? ""}
-                        onChange={(event) =>
-                          updateItem(item.id, { detail: event.target.value || null })
-                        }
-                        rows={2}
-                        placeholder="补充路线、交通、预约或取舍提醒"
-                        className="mt-2 w-full resize-none rounded-[10px] bg-card/55 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
-                      />
                       {item.reason && (
                         <div className="mt-2 rounded-[10px] bg-card/55 px-2.5 py-2">
                           <p className="text-[9px] font-semibold text-foreground">推荐理由</p>
@@ -1716,7 +1707,6 @@ function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
         const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
         const duration = item.duration ? ` · ${item.duration}` : "";
         lines.push(`${item.time ?? "时间未定"} · ${item.title}${duration} · ${meta.label}`);
-        if (item.detail) lines.push(`  ${item.detail}`);
         if (item.reason) lines.push(`  推荐理由：${item.reason}`);
         if (item.transportToNext) lines.push(`  下一站：${item.transportToNext}`);
         (item.checks ?? []).forEach((check) => lines.push(`  需确认：${check}`));

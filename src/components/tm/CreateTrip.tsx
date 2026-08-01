@@ -614,15 +614,6 @@ export function CreateTrip({
                             }
                             className="mt-2 w-full bg-transparent text-[13px] font-semibold text-foreground outline-none"
                           />
-                          <textarea
-                            value={item.detail ?? ""}
-                            onChange={(event) =>
-                              updatePreviewItem(item.id, { detail: event.target.value || null })
-                            }
-                            rows={2}
-                            placeholder="补充路线、交通、取舍或预约提醒"
-                            className="mt-1 w-full resize-none bg-transparent text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
-                          />
                           {item.reason && (
                             <p className="mt-1 rounded-[10px] bg-card/50 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
                               推荐理由：{item.reason}
