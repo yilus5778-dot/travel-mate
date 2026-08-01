@@ -16,8 +16,10 @@ import {
   displayTravelDate,
   extractTravelIntent,
   getDestinationCandidates,
+  getItineraryPlanningQuality,
   isMeaningfulIdea,
   organizePastedItinerary,
+  type AIPlanStatus,
   type CompanionProfile,
   type ItineraryItem,
   type PlanningMode,
@@ -75,6 +77,7 @@ export function CreateTrip({
     durationDaysValue = durationDays ? Number(durationDays) : null,
     peopleCountValue = peopleCount ? Number(peopleCount) : null,
     itineraryValue,
+    aiPlanStatusValue,
     aiSummaryValue,
   }: {
     mode: PlanningMode;
@@ -86,6 +89,7 @@ export function CreateTrip({
     durationDaysValue?: number | null;
     peopleCountValue?: number | null;
     itineraryValue: ItineraryItem[];
+    aiPlanStatusValue?: AIPlanStatus;
     aiSummaryValue: string;
   }) => {
     const resolvedDateText =
@@ -104,7 +108,7 @@ export function CreateTrip({
         peopleCount: peopleCountValue,
         budget: budget ? Number(budget) : null,
         planningMode: mode,
-        aiPlanStatus: mode === "plan" ? "generated" : "organized",
+        aiPlanStatus: aiPlanStatusValue ?? (mode === "plan" ? "generated" : "organized"),
         aiSummary: aiSummaryValue,
         sources: recognizedSources,
         itinerary: itineraryValue,
@@ -212,13 +216,17 @@ export function CreateTrip({
   const generatePlan = () => {
     const selectedDestination = destination.trim() || null;
     const days = durationDays ? Number(durationDays) : 3;
+    const quality = getItineraryPlanningQuality(selectedDestination, days);
     const generated = buildSuggestedItinerary(selectedDestination, days, companion?.key);
     createDraftFromPlan({
       mode: "plan",
       durationDaysValue: days,
       peopleCountValue: peopleCount ? Number(peopleCount) : null,
       itineraryValue: generated,
-      aiSummaryValue: `已生成 ${days} 天可编辑攻略；基础路线、搭子加料、推荐理由、美食、路线图和资料补充都放在行程规划页继续调整。`,
+      aiPlanStatusValue: quality.ready ? "generated" : "needs_questions",
+      aiSummaryValue: quality.ready
+        ? `${quality.summary} 基础路线、搭子加料、推荐理由、美食、路线图和资料补充都放在行程规划页继续调整。`
+        : quality.summary,
     });
   };
 

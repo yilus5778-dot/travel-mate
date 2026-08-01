@@ -31,6 +31,7 @@ import {
   buildPackingChecklist,
   buildSuggestedItinerary,
   displayTravelDate,
+  getItineraryPlanningQuality,
   TRAVEL_STATUS_LABELS,
   type CompanionProfile,
   type ExpenseCategory,
@@ -967,6 +968,8 @@ function DayPlanEditor({
   }, [dayCount, selectedDay]);
 
   const baseDayItems = dayItems.filter((item) => !item.companionAccent);
+  const isReliabilityPendingDay =
+    baseDayItems.length > 0 && baseDayItems.every((item) => item.duration === "待生成");
 
   const updateItem = (id: string, patch: Partial<ItineraryItem>) => {
     onPatch({
@@ -1031,8 +1034,9 @@ function DayPlanEditor({
     setSelectedDay(nextDay);
   };
 
-  const firstStop = baseDayItems[0] ?? dayItems[0] ?? null;
-  const routeItems = baseDayItems.slice(0, 4);
+  const navigableDayItems = baseDayItems.filter((item) => item.duration !== "待生成");
+  const firstStop = navigableDayItems[0] ?? null;
+  const routeItems = navigableDayItems.slice(0, 4);
   const companionAddonCount = dayItems.filter((item) => item.companionAccent).length;
   const checkItems = dayItems.flatMap((item) =>
     (item.checks ?? []).map((check) => ({ id: `${item.id}-${check}`, title: item.title, check })),
@@ -1101,12 +1105,22 @@ function DayPlanEditor({
       <div className="px-4 py-3">
         <div className="flex items-center gap-2 rounded-[12px] bg-brand-soft px-3 py-2 text-[10px] text-muted-foreground">
           <Route className="size-3.5 shrink-0 text-accent" />
-          <span className="shrink-0 font-semibold text-foreground">低折返</span>
-          <span>·</span>
-          <span>{dayIntensityLabel(baseDayItems.length)}</span>
-          <span>·</span>
-          <span>{baseDayItems.length} 主线</span>
-          {companionAddonCount > 0 && (
+          {isReliabilityPendingDay ? (
+            <>
+              <span className="shrink-0 font-semibold text-foreground">可靠路线待生成</span>
+              <span>·</span>
+              <span>不会用通用模板硬填</span>
+            </>
+          ) : (
+            <>
+              <span className="shrink-0 font-semibold text-foreground">低折返</span>
+              <span>·</span>
+              <span>{dayIntensityLabel(baseDayItems.length)}</span>
+              <span>·</span>
+              <span>{baseDayItems.length} 主线</span>
+            </>
+          )}
+          {!isReliabilityPendingDay && companionAddonCount > 0 && (
             <>
               <span>·</span>
               <span className="font-semibold text-accent">{companionAddonCount} 个搭子加料</span>
@@ -1114,7 +1128,13 @@ function DayPlanEditor({
           )}
         </div>
 
-        <DailyFoodCard destination={travel.destination} day={selectedDay} />
+        {isReliabilityPendingDay ? (
+          <div className="mt-2 rounded-[13px] bg-card/85 px-3 py-2 text-[10px] text-muted-foreground shadow-[var(--shadow-card)]">
+            美食推荐待可靠来源确认，不会用“当地特色菜”占位。
+          </div>
+        ) : (
+          <DailyFoodCard destination={travel.destination} day={selectedDay} />
+        )}
 
         {dayItems.length ? (
           <div className="mt-3">
@@ -1123,6 +1143,7 @@ function DayPlanEditor({
               const accentClasses = item.companionAccent
                 ? COMPANION_ACCENT_CLASSES[item.companionAccent.key]
                 : null;
+              const canNavigateToItem = item.duration !== "待生成";
               const nextItem = dayItems[index + 1];
               return (
                 <div key={item.id}>
@@ -1231,8 +1252,9 @@ function DayPlanEditor({
                         </span>
                         <button
                           type="button"
+                          disabled={!canNavigateToItem}
                           onClick={() => openMapSearch(item.title, travel.destination)}
-                          className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground"
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground disabled:opacity-35"
                         >
                           <Navigation className="size-3 text-accent" /> 导航
                         </button>
@@ -1364,7 +1386,10 @@ function TripHeroCard({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const isDraft = travel.status === "draft";
   const dateLabel = displayTravelDate(travel.dateText, travel.durationDays);
-  const canShare = Boolean(travel.destination) && travel.itinerary.length > 0;
+  const canShare =
+    Boolean(travel.destination) &&
+    travel.itinerary.length > 0 &&
+    travel.aiPlanStatus === "generated";
 
   const patchTravel = (patch: Partial<TravelItem>) =>
     onUpdate({
@@ -1375,15 +1400,16 @@ function TripHeroCard({
 
   const generatePlan = () => {
     const days = travel.durationDays ?? 3;
+    const quality = getItineraryPlanningQuality(travel.destination, days);
     patchTravel({
       itinerary: buildSuggestedItinerary(travel.destination, days, companion?.key),
       durationDays: days,
-      aiPlanStatus: "generated",
-      aiSummary: `已根据“${
-        travel.destinationPreference || travel.destination || "当前旅行想法"
-      }”生成 ${days} 天可编辑攻略。基础路线保持不变；${
-        companion ? `已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料。` : ""
-      }明确输入、AI 建议和动态风险会分开标注，避免满屏待确认。`,
+      aiPlanStatus: quality.ready ? "generated" : "needs_questions",
+      aiSummary: quality.ready
+        ? `${quality.summary}${
+            companion ? ` 已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料。` : ""
+          }明确输入、AI 建议和动态风险会分开标注，避免满屏待确认。`
+        : quality.summary,
     });
   };
 
@@ -2430,7 +2456,7 @@ export function TripsTab({
                 </div>
                 {Boolean(plannedTravel.destination) &&
                   plannedTravel.itinerary.length > 0 &&
-                  plannedTravel.aiPlanStatus !== "not_started" && (
+                  plannedTravel.aiPlanStatus === "generated" && (
                     <button
                       type="button"
                       onClick={() => startGroupShare(plannedTravel, "home")}
@@ -2482,7 +2508,7 @@ export function TripsTab({
                 {plannedTravel.status !== "archived" &&
                   Boolean(plannedTravel.destination) &&
                   plannedTravel.itinerary.length > 0 &&
-                  plannedTravel.aiPlanStatus !== "not_started" && (
+                  plannedTravel.aiPlanStatus === "generated" && (
                     <button
                       onClick={() => startShare(plannedTravel, "home")}
                       className="relative flex w-full items-center justify-center gap-1.5 border-t border-border bg-card px-4 py-3 text-[11px] font-medium text-foreground"
@@ -2545,7 +2571,7 @@ export function TripsTab({
                 {item.status !== "archived" &&
                   Boolean(item.destination) &&
                   item.itinerary.length > 0 &&
-                  item.aiPlanStatus !== "not_started" && (
+                  item.aiPlanStatus === "generated" && (
                     <button
                       onClick={() => startShare(item, "home")}
                       className="mt-3 flex w-full items-center justify-center gap-1.5 border-t border-border pt-3 text-[12px] font-medium text-foreground"

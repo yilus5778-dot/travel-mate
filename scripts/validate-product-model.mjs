@@ -37,4 +37,25 @@ assert.deepEqual([...new Set(generated.map((item) => item.day))], [1, 2, 3]);
 assert.ok(generated.every((item) => item.time));
 assert.equal(model.isMeaningfulIdea("123"), false);
 
+const grassland = model.extractTravelIntent("想去草原玩五天");
+assert.equal(grassland.destination, null);
+assert.equal(grassland.destinationPreference, "草原");
+assert.equal(grassland.durationDays, 5);
+assert.deepEqual(model.getDestinationCandidates(grassland.destinationPreference), [
+  "呼伦贝尔",
+  "锡林郭勒",
+  "乌兰察布",
+]);
+
+const hailar = model.buildSuggestedItinerary("海拉尔", 3);
+assert.ok(hailar.some((item) => item.title.includes("莫尔格勒河")));
+assert.ok(hailar.some((item) => item.title.includes("返回海拉尔")));
+assert.equal(model.getItineraryPlanningQuality("海拉尔", 3).ready, true);
+
+const unsupported = model.buildSuggestedItinerary("火星", 3);
+assert.ok(unsupported.every((item) => item.evidence === "needs_check"));
+assert.ok(unsupported.some((item) => item.title.includes("可靠来源")));
+assert.equal(model.getItineraryPlanningQuality("火星", 3).ready, false);
+assert.ok(!unsupported.some((item) => item.title.includes("核心安排")));
+
 console.log("Travelmate product model validation passed.");

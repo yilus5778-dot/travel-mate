@@ -989,6 +989,105 @@ function getItineraryTemplate(
   return destination ? ITINERARY_TEMPLATES[destination] : undefined;
 }
 
+function buildTemplateExtensionDay(
+  destination: string | null,
+  day: number,
+): ItineraryTemplateStop[] {
+  const place = destination ?? "当前目的地";
+  return [
+    {
+      time: "09:30",
+      title: `D${day}延展路线待联网校验`,
+      detail:
+        "这个目的地的基础路线库还没有覆盖到这一天，不自动塞未核验景点；补充攻略链接、订单或开启联网检索后再生成具体路线。",
+      duration: "待生成",
+      reason: `为了保证${place}攻略准确，超出已覆盖天数的部分先保留为待校验，不用通用模板冒充真实行程。`,
+      evidence: "needs_check",
+      checks: ["需要确认当天住宿位置、交通距离、开放时间和是否适合继续延展。"],
+      alternatives: ["可改成返程缓冲、自由活动或根据导入资料重算。"],
+    },
+  ];
+}
+
+function buildResearchRequiredTemplate(
+  destination: string | null,
+  durationDays: number,
+): ItineraryTemplateStop[][] {
+  const place = destination?.trim() || "目的地";
+  return Array.from({ length: durationDays }, (_, index) =>
+    index === 0
+      ? [
+          {
+            time: "09:30",
+            title: `${place}攻略需要可靠来源`,
+            detail:
+              "这个目的地还没有接入可靠路线库；系统不会把通用模板包装成真实攻略。请先导入攻略链接、订单截图或接入联网检索。",
+            duration: "待生成",
+            reason:
+              "不同城市的动线、住宿片区、季节和交通差异很大，缺少来源时直接生成景点顺序容易误导用户。",
+            evidence: "needs_check",
+            checks: ["需要至少一个可靠资料来源：官方/地图/近期攻略/用户上传行程。"],
+          },
+          {
+            time: "13:30",
+            title: "确认到达入口和住宿片区",
+            detail:
+              "先确认出发城市、到达机场/车站、住宿区域和同行人数；这些会决定每天路线是否低折返。",
+            duration: "待生成",
+            reason: "旅行计划不是景点列表，入口和住宿位置会改变整条动线，必须先作为关键条件。",
+            evidence: "needs_check",
+            checks: ["出发城市、到达时间、住宿片区和人数仍需补充或确认。"],
+          },
+          {
+            time: "18:30",
+            title: "导入资料后生成分天路线",
+            detail:
+              "把网页链接、图片或完整行程补进来后，再按天生成可导航路线、美食和清单；无法确认的信息继续标待核验。",
+            duration: "待生成",
+            reason: "先收集来源再生成计划，可以保证路线可解释，也避免把 AI 推测写成事实。",
+            evidence: "needs_check",
+            checks: ["待接入网页正文/OCR/地图结果后生成具体地点。"],
+          },
+        ]
+      : [
+          {
+            time: "09:30",
+            title: `D${index + 1}路线待可靠来源生成`,
+            detail: "这一日不会先放虚假景点；导入资料或完成联网检索后，系统再生成当天时间线。",
+            duration: "待生成",
+            reason: "保证每一天都基于来源生成，而不是用一套通用城市模板填满页面。",
+            evidence: "needs_check",
+            checks: ["当天景点顺序、车程和开放情况待可靠来源确认。"],
+          },
+        ],
+  );
+}
+
+export function getItineraryPlanningQuality(
+  destination: string | null,
+  durationDays: number | null,
+) {
+  const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
+  const template = getItineraryTemplate(destination, days);
+  if (template) {
+    const coveredDays = Math.min(template.length, days);
+    return {
+      ready: coveredDays >= days,
+      label: coveredDays >= days ? "可靠路线库" : "部分覆盖",
+      summary:
+        coveredDays >= days
+          ? `已使用${destination ?? "当前目的地"}的可靠路线库生成 ${days} 天可编辑攻略；路线结构优先低折返，开放时间、票务、天气和交通班次仍作为动态项待核验。`
+          : `已使用${destination ?? "当前目的地"}的可靠路线库生成前 ${coveredDays} 天；第 ${coveredDays + 1} 天起不会用通用模板硬填，会保留为待联网校验。`,
+    };
+  }
+
+  return {
+    ready: false,
+    label: "需要可靠来源",
+    summary: `${destination?.trim() || "这个目的地"}暂未接入可靠路线库。系统已停止生成通用景点拼盘；请导入攻略链接、图片/订单或接入联网检索后，再生成具体可执行路线。`,
+  };
+}
+
 const GENERIC_DAY_PLANS: ItineraryTemplateStop[][] = [
   [
     {
@@ -1217,29 +1316,15 @@ export function buildSuggestedItinerary(
   companionKey?: AnimalKey | null,
 ): ItineraryItem[] {
   const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
-  const template = getItineraryTemplate(destination, days);
+  const reliableTemplate = getItineraryTemplate(destination, days);
+  const template = reliableTemplate ?? buildResearchRequiredTemplate(destination, days);
 
   const itinerary = Array.from({ length: days }, (_, dayIndex) => {
-    const fallback =
-      GENERIC_DAY_PLANS[dayIndex] ??
-      ([
-        {
-          time: "09:30",
-          title: `${destination ?? "目的地"}第 ${dayIndex + 1} 天核心安排`,
-          detail: "这一天的具体地点待补充；先保留一个上午核心点、一个下午顺路点和一个晚间轻松点。",
-        },
-        {
-          time: "13:30",
-          title: "顺路午餐与补充体验",
-          detail: "午餐尽量放在上午点附近；下午只添加顺路地点，避免路线来回跳。",
-        },
-        {
-          time: "18:30",
-          title: "晚间休整",
-          detail: "根据体力安排夜景、餐区或回酒店休息；不强行塞满。",
-        },
-      ] satisfies ItineraryTemplateStop[]);
-    const dayPlan = template?.[dayIndex] ?? fallback;
+    const dayPlan =
+      template[dayIndex] ??
+      (reliableTemplate
+        ? buildTemplateExtensionDay(destination, dayIndex + 1)
+        : (GENERIC_DAY_PLANS[dayIndex] ?? buildResearchRequiredTemplate(destination, days)[0]));
 
     return dayPlan.map((stop, itemIndex) => ({
       id: `ai-itinerary-${Date.now()}-${dayIndex}-${itemIndex}`,
@@ -1262,7 +1347,9 @@ export function buildSuggestedItinerary(
     }));
   }).flat();
 
-  return applyCompanionItineraryAccents(itinerary, destination, days, companionKey);
+  return reliableTemplate
+    ? applyCompanionItineraryAccents(itinerary, destination, days, companionKey)
+    : itinerary;
 }
 
 export function organizePastedItinerary(textValue: string): ItineraryItem[] {
