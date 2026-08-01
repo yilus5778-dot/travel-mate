@@ -208,6 +208,15 @@ function extractDate(text: string): {
     : { dateText: null, dateStatus: "undecided" };
 }
 
+export function displayTravelDate(dateText: string | null, durationDays?: number | null) {
+  if (!dateText) return null;
+  if (dateText.includes("国庆")) {
+    const days = durationDays && durationDays > 0 ? Math.min(durationDays, 10) : null;
+    return days && days > 1 ? `10月1日—10月${days}日` : "10月1日";
+  }
+  return dateText;
+}
+
 export function extractTravelIntent(textValue: string) {
   const text = textValue.trim();
   const knownDestination = DESTINATIONS.find((name) => text.includes(name)) ?? null;

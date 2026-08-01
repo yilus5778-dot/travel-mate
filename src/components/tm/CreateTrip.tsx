@@ -19,6 +19,7 @@ import {
 import {
   buildSuggestedItinerary,
   createTravelDraft,
+  displayTravelDate,
   extractTravelIntent,
   getDestinationCandidates,
   isMeaningfulIdea,
@@ -73,6 +74,7 @@ export function CreateTrip({
     ["selected", "uploading", "recognizing"].includes(source.status),
   );
   const hasInput = meaningfulText || recognizedSources.length > 0;
+  const dateLabel = displayTravelDate(dateText || null, durationDays ? Number(durationDays) : null);
 
   const recognizeSources = async (ids: string[]) => {
     setSources((current) =>
@@ -170,7 +172,7 @@ export function CreateTrip({
     setItinerary(generated);
     setAiSummary(
       `根据“${destinationPreference || selectedDestination || "目的地待定"}”、${
-        dateText || "时间待定"
+        dateLabel || "时间待定"
       }和 ${days} 天，我先生成一版可编辑方案。地点与安排均为 AI 建议，不会冒充你已确认的信息。`,
     );
     setStep("preview");
@@ -184,7 +186,7 @@ export function CreateTrip({
       destinationPreference,
       destinationCandidates,
       dateStatus,
-      dateText,
+      dateText: dateLabel ?? dateText,
       durationDays: durationDays ? Number(durationDays) : null,
       peopleCount: peopleCount ? Number(peopleCount) : null,
       budget: budget ? Number(budget) : null,
@@ -371,7 +373,7 @@ export function CreateTrip({
                 {durationDays ? ` 已识别行程时长 ${durationDays} 天。` : " 行程时长待补充。"}
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Tag>{dateText || "时间待确认"}</Tag>
+                <Tag>{dateLabel || "时间待确认"}</Tag>
                 <Tag>{durationDays ? `${durationDays} 天` : "时长待确认"}</Tag>
                 <Tag>{peopleCount ? `${peopleCount} 人` : "人数待确认"}</Tag>
               </div>
@@ -468,7 +470,7 @@ export function CreateTrip({
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {[
                   [MapPin, "目的地", destination || destinationPreference || null],
-                  [CalendarDays, "日期", dateText || null],
+                  [CalendarDays, "日期", dateLabel || null],
                   [Clock3, "时长", durationDays ? `${durationDays} 天` : null],
                   [Users, "人数", peopleCount ? `${peopleCount} 人` : null],
                 ].map(([Icon, label, value]) => {
