@@ -32,6 +32,10 @@ export interface ItineraryItem {
   evidence?: ItineraryEvidence;
   checks?: string[];
   alternatives?: string[];
+  companionAccent?: {
+    key: AnimalKey;
+    label: string;
+  } | null;
   confirmed: boolean;
   source: "user" | "ai";
 }
@@ -668,14 +672,171 @@ const SUGGESTED_TRANSPORTS = [
   "前往下一站 · 按低折返顺序排列，接入地图后校验路线",
 ];
 
+const COMPANION_ADDON_TIMES: Record<AnimalKey, string> = {
+  cat: "20:30",
+  dolphin: "20:20",
+  panda: "15:30",
+  bird: "16:20",
+  dog: "12:20",
+  elephant: "08:20",
+  fox: "16:40",
+};
+
+const COMPANION_ANIMAL_LABELS: Record<AnimalKey, string> = {
+  cat: "猫",
+  dolphin: "海豚",
+  panda: "熊猫",
+  bird: "小鸟",
+  dog: "小狗",
+  elephant: "大象",
+  fox: "狐狸",
+};
+
+function companionAddonDays(durationDays: number) {
+  const days = Math.min(Math.max(durationDays, 1), 7);
+  const addonCount = Math.min(days, 3);
+  return Array.from({ length: addonCount }, (_, index) => index + 1);
+}
+
+function buildCompanionAddon(
+  companionKey: AnimalKey,
+  destination: string | null,
+  day: number,
+): ItineraryItem {
+  const place = destination ?? "当天路线";
+  const base = {
+    id: `companion-addon-${Date.now()}-${companionKey}-${day}`,
+    day,
+    time: COMPANION_ADDON_TIMES[companionKey],
+    evidence: "suggested" as const,
+    checks: [],
+    alternatives: [],
+    confirmed: false,
+    source: "ai" as const,
+    companionAccent: {
+      key: companionKey,
+      label: `${COMPANION_ANIMAL_LABELS[companionKey]}搭子加料`,
+    },
+  };
+
+  if (companionKey === "cat") {
+    return {
+      ...base,
+      title: `${place}安静角落`,
+      detail: "在当天主线附近找一个可坐下的咖啡、书店或海边长椅，留一小段不社交的恢复时间。",
+      duration: "30–45 分钟",
+      transportToNext: null,
+      reason:
+        "在当天主线附近找一个可坐下的咖啡、书店或海边长椅；猫搭子尊重独处空间，这个加料只占很小一段时间，不改变主路线。",
+    };
+  }
+  if (companionKey === "dolphin") {
+    return {
+      ...base,
+      title: "同行高光交换",
+      detail: "在晚餐后或当天最后一站，选一个方便停留的地方，让每个人说一个今日高光并拍一张合照。",
+      duration: "20–30 分钟",
+      transportToNext: null,
+      reason:
+        "放在晚餐后或最后一站，让每个人说一个今日高光并拍一张合照；海豚搭子更重视同行氛围，用轻量互动提升参与感。",
+    };
+  }
+  if (companionKey === "panda") {
+    return {
+      ...base,
+      title: "松弛补给站",
+      detail: "在下午主行程之间安排坐下喝水、甜品或回酒店短休，不新增远距离移动。",
+      duration: "30–45 分钟",
+      transportToNext: null,
+      reason:
+        "放在下午主行程之间，坐下喝水、吃甜品或回酒店短休；熊猫搭子会给体力留余地，让计划不因为过满而崩掉。",
+    };
+  }
+  if (companionKey === "bird") {
+    return {
+      ...base,
+      title: "顺路灵感岔路",
+      detail: "只在当前街区或景点周边临时探索一条小巷、观景点或市集，不跨区追新点。",
+      duration: "20–40 分钟",
+      transportToNext: null,
+      reason:
+        "只在当前街区或景点周边探索一条小巷、观景点或市集；小鸟搭子保留一点自由探索，但把范围限制在顺路半径内。",
+    };
+  }
+  if (companionKey === "dog") {
+    return {
+      ...base,
+      title: "同行集合补给",
+      detail: "午餐前后设一个固定集合点，确认每个人体力、饮水和下一站是否都 OK。",
+      duration: "15–25 分钟",
+      transportToNext: null,
+      reason:
+        "午餐前后设一个固定集合点，确认每个人体力、饮水和下一站是否 OK；小狗搭子关注团队感受，让同行人不容易掉队。",
+    };
+  }
+  if (companionKey === "elephant") {
+    return {
+      ...base,
+      title: "出发前确认站",
+      detail: "当天出门前确认门票、交通、天气和第一站导航，只做确认，不额外增加景点。",
+      duration: "10–15 分钟",
+      transportToNext: null,
+      reason:
+        "当天出门前确认门票、交通、天气和第一站导航；大象搭子偏稳健，把不确定性提前收口，但不改变原本行程主线。",
+    };
+  }
+  return {
+    ...base,
+    title: "Plan B 弹性口袋",
+    detail: "给当天保留一个可随时替换的低成本选项：附近咖啡、轻松街区或提前回酒店。",
+    duration: "20–40 分钟",
+    transportToNext: null,
+    reason:
+      "给当天保留一个可随时替换的低成本选项：附近咖啡、轻松街区或提前回酒店；狐狸搭子负责应变，让排队、天气或疲劳时有退路。",
+  };
+}
+
+function sortItineraryForDisplay(items: ItineraryItem[]) {
+  return items.slice().sort((a, b) => {
+    const dayDiff = (a.day ?? 1) - (b.day ?? 1);
+    if (dayDiff !== 0) return dayDiff;
+    const timeA = a.time ?? "99:99";
+    const timeB = b.time ?? "99:99";
+    if (timeA !== timeB) return timeA.localeCompare(timeB);
+    return a.id.localeCompare(b.id);
+  });
+}
+
+export function applyCompanionItineraryAccents(
+  itinerary: ItineraryItem[],
+  destination: string | null,
+  durationDays: number | null,
+  companionKey: AnimalKey | null | undefined,
+) {
+  if (!companionKey) return itinerary;
+
+  const dayCount = Math.max(durationDays ?? 0, ...itinerary.map((item) => item.day ?? 1), 1);
+  const existingAddonDays = new Set(
+    itinerary
+      .filter((item) => item.companionAccent?.key === companionKey)
+      .map((item) => item.day ?? 1),
+  );
+  const addons = companionAddonDays(dayCount)
+    .filter((day) => !existingAddonDays.has(day))
+    .map((day) => buildCompanionAddon(companionKey, destination, day));
+
+  return sortItineraryForDisplay([...itinerary, ...addons]);
+}
+
 export function buildSuggestedItinerary(
   destination: string | null,
   durationDays: number | null,
+  companionKey?: AnimalKey | null,
 ): ItineraryItem[] {
   const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
   const template = destination ? ITINERARY_TEMPLATES[destination] : undefined;
 
-  return Array.from({ length: days }, (_, dayIndex) => {
+  const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const fallback =
       GENERIC_DAY_PLANS[dayIndex] ??
       ([
@@ -712,10 +873,13 @@ export function buildSuggestedItinerary(
       evidence: stop.evidence ?? "suggested",
       checks: stop.checks ?? [],
       alternatives: stop.alternatives ?? [],
+      companionAccent: null,
       confirmed: false,
       source: "ai" as const,
     }));
   }).flat();
+
+  return applyCompanionItineraryAccents(itinerary, destination, days, companionKey);
 }
 
 export function organizePastedItinerary(textValue: string): ItineraryItem[] {
@@ -737,6 +901,7 @@ export function organizePastedItinerary(textValue: string): ItineraryItem[] {
     evidence: "confirmed",
     checks: [],
     alternatives: [],
+    companionAccent: null,
     confirmed: false,
     source: "user",
   }));
@@ -842,6 +1007,7 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
         item.evidence ?? (item.source === "user" || item.confirmed ? "confirmed" : "suggested"),
       checks: item.checks ?? [],
       alternatives: item.alternatives ?? [],
+      companionAccent: item.companionAccent ?? null,
       source: item.source ?? "user",
     })),
     expenses: (travel.expenses ?? []).map((expense) => ({

@@ -24,6 +24,7 @@ import {
   getDestinationCandidates,
   isMeaningfulIdea,
   organizePastedItinerary,
+  type CompanionProfile,
   type ItineraryEvidence,
   type ItineraryItem,
   type PlanningMode,
@@ -31,6 +32,7 @@ import {
   type TravelDateStatus,
   type TravelItem,
 } from "@/lib/app-model";
+import { COMPANIONS, type AnimalKey } from "@/lib/travelmate-data";
 import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
 
 type Step = "input" | "analyzing" | "questions" | "preview";
@@ -53,6 +55,54 @@ function evidenceMeta(
   if (finalEvidence === "queried") return { label: "已查询", tone: "accent" };
   if (finalEvidence === "needs_check") return { label: "需确认", tone: "muted" };
   return { label: "AI 建议", tone: "accent" };
+}
+
+const COMPANION_ACCENT_CLASSES: Record<
+  AnimalKey,
+  {
+    card: string;
+    tag: string;
+  }
+> = {
+  cat: {
+    card: "border border-[#d8c7f2] bg-[#f5f0ff]",
+    tag: "bg-[#e6d8ff] text-[#5d4a86]",
+  },
+  dolphin: {
+    card: "border border-[#b9ddeb] bg-[#ecf8fc]",
+    tag: "bg-[#d7f0f8] text-[#28677a]",
+  },
+  panda: {
+    card: "border border-[#c8dec0] bg-[#f0f7ec]",
+    tag: "bg-[#dcf0d2] text-[#4d7141]",
+  },
+  bird: {
+    card: "border border-[#ead58d] bg-[#fff8df]",
+    tag: "bg-[#ffedac] text-[#7a5c11]",
+  },
+  dog: {
+    card: "border border-[#ebc28f] bg-[#fff1df]",
+    tag: "bg-[#ffe0b7] text-[#79512a]",
+  },
+  elephant: {
+    card: "border border-[#c8d1d8] bg-[#f0f3f6]",
+    tag: "bg-[#dce4ea] text-[#51606c]",
+  },
+  fox: {
+    card: "border border-[#efb899] bg-[#fff0e8]",
+    tag: "bg-[#ffd9c5] text-[#8a4d2e]",
+  },
+};
+
+function CompanionAccentTag({ item }: { item: ItineraryItem }) {
+  if (!item.companionAccent) return null;
+  const companion = COMPANIONS[item.companionAccent.key];
+  const classes = COMPANION_ACCENT_CLASSES[item.companionAccent.key];
+  return (
+    <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${classes.tag}`}>
+      {companion.emoji} {item.companionAccent.label}
+    </span>
+  );
 }
 
 function stopVisualMeta(title: string, destination: string | null) {
@@ -97,9 +147,11 @@ function StopImageCard({ title, destination }: { title: string; destination: str
 export function CreateTrip({
   onCancel,
   onCreated,
+  companion,
 }: {
   onCancel: () => void;
   onCreated: (travel: TravelItem) => void;
+  companion?: CompanionProfile | null;
 }) {
   const [step, setStep] = useState<Step>("input");
   const [inputText, setInputText] = useState("");
@@ -224,12 +276,14 @@ export function CreateTrip({
   const generatePlan = () => {
     const selectedDestination = destination.trim() || null;
     const days = durationDays ? Number(durationDays) : 3;
-    const generated = buildSuggestedItinerary(selectedDestination, days);
+    const generated = buildSuggestedItinerary(selectedDestination, days, companion?.key);
     setItinerary(generated);
     setAiSummary(
       `根据“${destinationPreference || selectedDestination || "目的地待定"}”、${
         dateLabel || "时间待定"
-      }和 ${days} 天，我先生成一版可编辑攻略：明确输入会标为已确认，路线和节奏标为 AI 建议，开放/预约/天气等动态信息才标需确认。`,
+      }和 ${days} 天，我先生成一版可编辑攻略：基础路线不变；${
+        companion ? `已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料。` : ""
+      }明确输入会标为已确认，路线和节奏标为 AI 建议，开放/预约/天气等动态信息才标需确认。`,
     );
     setStep("preview");
   };
@@ -581,8 +635,11 @@ export function CreateTrip({
                 <div className="mt-3 space-y-2">
                   {itinerary.map((item, index) => {
                     const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+                    const accentClasses = item.companionAccent
+                      ? COMPANION_ACCENT_CLASSES[item.companionAccent.key].card
+                      : "bg-surface-sunk";
                     return (
-                      <div key={item.id} className="rounded-[14px] bg-surface-sunk p-3">
+                      <div key={item.id} className={`rounded-[14px] p-3 ${accentClasses}`}>
                         <StopImageCard title={item.title} destination={destination || null} />
                         <div className="flex items-center gap-2">
                           <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
@@ -596,7 +653,11 @@ export function CreateTrip({
                             }
                             className="w-[68px] bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
                           />
-                          <Tag tone={meta.tone}>{meta.label}</Tag>
+                          {item.companionAccent ? (
+                            <CompanionAccentTag item={item} />
+                          ) : (
+                            <Tag tone={meta.tone}>{meta.label}</Tag>
+                          )}
                           <input
                             value={item.duration ?? ""}
                             onChange={(event) =>

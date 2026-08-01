@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { COMPANIONS } from "@/lib/travelmate-data";
 import {
+  applyCompanionItineraryAccents,
   buildSuggestedItinerary,
   displayTravelDate,
   TRAVEL_STATUS_LABELS,
@@ -39,6 +40,7 @@ import {
   type TravelItem,
   type TravelStatus,
 } from "@/lib/app-model";
+import type { AnimalKey } from "@/lib/travelmate-data";
 import { MiniShell, Card, PrimaryButton, Tag, type TabKey } from "./MiniShell";
 import { CreateTrip } from "./CreateTrip";
 import { AccountingCenter } from "./AccountingCenter";
@@ -66,6 +68,70 @@ function evidenceMeta(
     return { label: "需确认", tone: "muted", description: "会受开放、预约或天气影响" };
   }
   return { label: "AI 建议", tone: "accent", description: "由 AI 基于路线和节奏规划" };
+}
+
+const COMPANION_ACCENT_CLASSES: Record<
+  AnimalKey,
+  {
+    card: string;
+    dot: string;
+    tag: string;
+    description: string;
+  }
+> = {
+  cat: {
+    card: "border border-[#d8c7f2] bg-[#f5f0ff]",
+    dot: "border-card bg-[#8d6ec8]",
+    tag: "bg-[#e6d8ff] text-[#5d4a86]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  dolphin: {
+    card: "border border-[#b9ddeb] bg-[#ecf8fc]",
+    dot: "border-card bg-[#49a9c7]",
+    tag: "bg-[#d7f0f8] text-[#28677a]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  panda: {
+    card: "border border-[#c8dec0] bg-[#f0f7ec]",
+    dot: "border-card bg-[#7fb06c]",
+    tag: "bg-[#dcf0d2] text-[#4d7141]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  bird: {
+    card: "border border-[#ead58d] bg-[#fff8df]",
+    dot: "border-card bg-[#d5a925]",
+    tag: "bg-[#ffedac] text-[#7a5c11]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  dog: {
+    card: "border border-[#ebc28f] bg-[#fff1df]",
+    dot: "border-card bg-[#d2904d]",
+    tag: "bg-[#ffe0b7] text-[#79512a]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  elephant: {
+    card: "border border-[#c8d1d8] bg-[#f0f3f6]",
+    dot: "border-card bg-[#81909b]",
+    tag: "bg-[#dce4ea] text-[#51606c]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+  fox: {
+    card: "border border-[#efb899] bg-[#fff0e8]",
+    dot: "border-card bg-[#e48454]",
+    tag: "bg-[#ffd9c5] text-[#8a4d2e]",
+    description: "由搭子人格加入的小安排，不改变基础路线。",
+  },
+};
+
+function CompanionAccentPill({ item }: { item: ItineraryItem }) {
+  if (!item.companionAccent) return null;
+  const companion = COMPANIONS[item.companionAccent.key];
+  const classes = COMPANION_ACCENT_CLASSES[item.companionAccent.key];
+  return (
+    <span className={`rounded-full px-2 py-1 text-[9px] font-semibold ${classes.tag}`}>
+      {companion.emoji} {item.companionAccent.label}
+    </span>
+  );
 }
 
 function dayIntensityLabel(itemCount: number) {
@@ -604,9 +670,11 @@ function openMapSearch(title: string, destination: string | null) {
 function DayPlanEditor({
   travel,
   onPatch,
+  companion,
 }: {
   travel: TravelItem;
   onPatch: (patch: Partial<TravelItem>) => void;
+  companion?: CompanionProfile | null;
 }) {
   const itineraryDays = travel.itinerary
     .map((item) => item.day ?? 1)
@@ -621,6 +689,13 @@ function DayPlanEditor({
   useEffect(() => {
     if (selectedDay > dayCount) setSelectedDay(dayCount);
   }, [dayCount, selectedDay]);
+
+  const companionType = companion ? COMPANIONS[companion.key] : null;
+  const companionAddonCount = travel.itinerary.filter((item) => item.companionAccent).length;
+  const hasCurrentCompanionAddons = companion
+    ? travel.itinerary.some((item) => item.companionAccent?.key === companion.key)
+    : false;
+  const baseDayItems = dayItems.filter((item) => !item.companionAccent);
 
   const updateItem = (id: string, patch: Partial<ItineraryItem>) => {
     onPatch({
@@ -649,6 +724,7 @@ function DayPlanEditor({
           evidence: "needs_check",
           checks: [],
           alternatives: [],
+          companionAccent: null,
           confirmed: false,
           source: "user",
         },
@@ -675,6 +751,7 @@ function DayPlanEditor({
           evidence: "needs_check",
           checks: [],
           alternatives: [],
+          companionAccent: null,
           confirmed: false,
           source: "user",
         },
@@ -683,8 +760,23 @@ function DayPlanEditor({
     setSelectedDay(nextDay);
   };
 
-  const firstStop = dayItems[0] ?? null;
-  const routeItems = dayItems.slice(0, 4);
+  const applyCompanionAddons = () => {
+    if (!companion) return;
+    onPatch({
+      itinerary: applyCompanionItineraryAccents(
+        travel.itinerary,
+        travel.destination,
+        travel.durationDays,
+        companion.key,
+      ),
+      aiSummary: `${
+        travel.aiSummary ?? "已生成可编辑攻略。"
+      } 已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料；基础路线不变，每天最多 1 个。`,
+    });
+  };
+
+  const firstStop = baseDayItems[0] ?? dayItems[0] ?? null;
+  const routeItems = baseDayItems.slice(0, 4);
   const suggestedCount = dayItems.filter(
     (item) => evidenceMeta(item.evidence, item.source, item.confirmed).label === "AI 建议",
   ).length;
@@ -763,7 +855,9 @@ function DayPlanEditor({
               用户信息、AI 推理和动态风险分开标注，不再满屏待确认。
             </p>
           </div>
-          <Tag>{dayItems.length} 站</Tag>
+          <Tag>
+            {baseDayItems.length} 主线{dayItems.length > baseDayItems.length ? " · 有加料" : ""}
+          </Tag>
         </div>
 
         <div className="mt-3 rounded-[16px] bg-brand-soft p-3">
@@ -776,9 +870,9 @@ function DayPlanEditor({
             <div className="rounded-[12px] bg-card/65 p-2">
               <p className="text-[9px] text-muted-foreground">当天强度</p>
               <p className="mt-1 text-[11px] font-semibold text-foreground">
-                {dayIntensityLabel(dayItems.length)}
+                {dayIntensityLabel(baseDayItems.length)}
               </p>
-              <p className="mt-0.5 text-[8px] text-muted-foreground">{dayItems.length} 站</p>
+              <p className="mt-0.5 text-[8px] text-muted-foreground">{baseDayItems.length} 主线</p>
             </div>
             <div className="rounded-[12px] bg-card/65 p-2">
               <p className="text-[9px] text-muted-foreground">信息状态</p>
@@ -793,12 +887,47 @@ function DayPlanEditor({
           </p>
         </div>
 
+        {companionType && (
+          <div className="mt-3 rounded-[16px] border border-border bg-card/75 p-3">
+            <div className="flex items-start gap-2">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[18px]">
+                {companionType.emoji}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[12px] font-semibold text-foreground">搭子风格加料</p>
+                  <Tag tone={hasCurrentCompanionAddons ? "accent" : "muted"}>
+                    {hasCurrentCompanionAddons ? `${companionAddonCount} 项` : "可加入"}
+                  </Tag>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                  {companionType.animal}
+                  搭子只给每天加一个以内的小安排，基础旅行计划和当日路线图不变。
+                </p>
+                {!hasCurrentCompanionAddons && (
+                  <button
+                    type="button"
+                    onClick={applyCompanionAddons}
+                    className="mt-2 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
+                  >
+                    加入{companionType.animal}搭子加料
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <DailyFoodCard destination={travel.destination} day={selectedDay} />
 
         {dayItems.length ? (
           <div className="mt-4">
             {dayItems.map((item, index) => {
               const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+              const accentClasses = item.companionAccent
+                ? COMPANION_ACCENT_CLASSES[item.companionAccent.key]
+                : null;
+              const nextItem = dayItems[index + 1];
               return (
                 <div key={item.id}>
                   <div className="grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2">
@@ -812,15 +941,29 @@ function DayPlanEditor({
                       className="mt-3 w-full bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
                     />
                     <div className="relative flex justify-center">
-                      <span className="relative z-10 mt-4 size-2.5 rounded-full border-2 border-card bg-accent shadow-sm" />
+                      <span
+                        className={`relative z-10 mt-4 size-2.5 rounded-full border-2 shadow-sm ${
+                          accentClasses ? accentClasses.dot : "border-card bg-accent"
+                        }`}
+                      />
                       {index < dayItems.length - 1 && (
                         <span className="absolute bottom-[-18px] top-5 w-px bg-border" />
                       )}
                     </div>
-                    <div className="rounded-[16px] bg-surface-sunk p-3">
+                    <div
+                      className={`rounded-[16px] p-3 ${
+                        accentClasses ? accentClasses.card : "bg-surface-sunk"
+                      }`}
+                    >
                       <StopImageCard title={item.title} destination={travel.destination} />
                       <div className="flex items-start gap-2">
-                        <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
+                        {item.companionAccent ? (
+                          <span className="mt-[-1px] shrink-0 text-[16px]">
+                            {COMPANIONS[item.companionAccent.key].emoji}
+                          </span>
+                        ) : (
+                          <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
+                        )}
                         <input
                           value={item.title}
                           onChange={(event) => updateItem(item.id, { title: event.target.value })}
@@ -835,7 +978,11 @@ function DayPlanEditor({
                         </button>
                       </div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        <Tag tone={meta.tone}>{meta.label}</Tag>
+                        {item.companionAccent ? (
+                          <CompanionAccentPill item={item} />
+                        ) : (
+                          <Tag tone={meta.tone}>{meta.label}</Tag>
+                        )}
                         <label className="flex max-w-[98px] items-center rounded-full bg-card/70 px-2 py-1 text-[10px] text-muted-foreground">
                           <input
                             value={item.duration ?? ""}
@@ -883,7 +1030,9 @@ function DayPlanEditor({
                         </div>
                       )}
                       <div className="mt-2 flex items-center justify-between gap-2">
-                        <span className="text-[9px] text-muted-foreground">{meta.description}</span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {accentClasses ? accentClasses.description : meta.description}
+                        </span>
                         <button
                           type="button"
                           onClick={() => openMapSearch(item.title, travel.destination)}
@@ -897,7 +1046,11 @@ function DayPlanEditor({
                   {index < dayItems.length - 1 && (
                     <div className="ml-[74px] flex min-h-8 items-center gap-1.5 py-1 text-[9px] text-muted-foreground">
                       <CarFront className="size-3" />
-                      <span>{item.transportToNext ?? "前往下一站 · 接入地图后实时计算"}</span>
+                      <span>
+                        {item.companionAccent || nextItem?.companionAccent
+                          ? "搭子加料不改变主路线 · 可按体力插入"
+                          : (item.transportToNext ?? "前往下一站 · 接入地图后实时计算")}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -961,7 +1114,9 @@ function DayPlanEditor({
             )}
           </div>
           <p className="mt-2 truncate text-[10px] text-muted-foreground">
-            {dayItems.length ? dayItems.map((item) => item.title).join(" → ") : "当天路线待补充"}
+            {routeItems.length
+              ? routeItems.map((item) => item.title).join(" → ")
+              : "当天路线待补充"}
           </p>
           <button
             type="button"
@@ -998,11 +1153,13 @@ function TripHeroCard({
   onUpdate,
   onOpenAccounting,
   onOpenGroupShare,
+  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
   onOpenAccounting: () => void;
   onOpenGroupShare: () => void;
+  companion: CompanionProfile | null;
 }) {
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState("");
@@ -1022,12 +1179,14 @@ function TripHeroCard({
   const generatePlan = () => {
     const days = travel.durationDays ?? 3;
     patchTravel({
-      itinerary: buildSuggestedItinerary(travel.destination, days),
+      itinerary: buildSuggestedItinerary(travel.destination, days, companion?.key),
       durationDays: days,
       aiPlanStatus: "generated",
       aiSummary: `已根据“${
         travel.destinationPreference || travel.destination || "当前旅行想法"
-      }”生成 ${days} 天可编辑攻略。明确输入、AI 建议和动态风险会分开标注，避免满屏待确认。`,
+      }”生成 ${days} 天可编辑攻略。基础路线保持不变；${
+        companion ? `已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料。` : ""
+      }明确输入、AI 建议和动态风险会分开标注，避免满屏待确认。`,
     });
   };
 
@@ -1276,10 +1435,12 @@ function DraftView({
   travel,
   onUpdate,
   onDelete,
+  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
   onDelete: (id: string) => void;
+  companion: CompanionProfile | null;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -1293,7 +1454,7 @@ function DraftView({
   return (
     <div className="space-y-3">
       {travel.itinerary.length ? (
-        <DayPlanEditor travel={travel} onPatch={patchTravel} />
+        <DayPlanEditor travel={travel} onPatch={patchTravel} companion={companion} />
       ) : (
         <Card className="text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-brand-soft">
@@ -1343,15 +1504,18 @@ function DraftView({
 function UpcomingView({
   travel,
   onUpdate,
+  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
+  companion: CompanionProfile | null;
 }) {
   return (
     <div className="space-y-3">
       {travel.itinerary.length > 0 && (
         <DayPlanEditor
           travel={travel}
+          companion={companion}
           onPatch={(patch) =>
             onUpdate({
               ...travel,
@@ -1395,15 +1559,18 @@ function UpcomingView({
 function ActiveView({
   travel,
   onUpdate,
+  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
+  companion: CompanionProfile | null;
 }) {
   return (
     <div className="space-y-3">
       {travel.itinerary.length > 0 && (
         <DayPlanEditor
           travel={travel}
+          companion={companion}
           onPatch={(patch) =>
             onUpdate({
               ...travel,
@@ -1705,8 +1872,13 @@ function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
       lines.push(`  推荐理由：${food.reason}`);
       dayItems.forEach((item) => {
         const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+        const companionAccent = item.companionAccent ? COMPANIONS[item.companionAccent.key] : null;
         const duration = item.duration ? ` · ${item.duration}` : "";
-        lines.push(`${item.time ?? "时间未定"} · ${item.title}${duration} · ${meta.label}`);
+        lines.push(
+          `${item.time ?? "时间未定"} · ${item.title}${duration} · ${
+            companionAccent ? `${companionAccent.emoji} ${item.companionAccent!.label}` : meta.label
+          }`,
+        );
         if (item.reason) lines.push(`  推荐理由：${item.reason}`);
         if (item.transportToNext) lines.push(`  下一站：${item.transportToNext}`);
         (item.checks ?? []).forEach((check) => lines.push(`  需确认：${check}`));
@@ -2019,6 +2191,7 @@ export function TripsTab({
   if (view === "create") {
     return (
       <CreateTrip
+        companion={companion}
         onCancel={() => setView("home")}
         onCreated={(created) => {
           onCreateTravel(created);
@@ -2216,19 +2389,25 @@ export function TripsTab({
           onUpdate={onUpdateTravel}
           onOpenAccounting={() => setView("accounting")}
           onOpenGroupShare={() => startGroupShare(travel, "trip")}
+          companion={companion}
         />
         {travel.status === "draft" && (
           <DraftView
             travel={travel}
             onUpdate={onUpdateTravel}
+            companion={companion}
             onDelete={(id) => {
               onDeleteTravel(id);
               setView("home");
             }}
           />
         )}
-        {travel.status === "upcoming" && <UpcomingView travel={travel} onUpdate={onUpdateTravel} />}
-        {travel.status === "active" && <ActiveView travel={travel} onUpdate={onUpdateTravel} />}
+        {travel.status === "upcoming" && (
+          <UpcomingView travel={travel} onUpdate={onUpdateTravel} companion={companion} />
+        )}
+        {travel.status === "active" && (
+          <ActiveView travel={travel} onUpdate={onUpdateTravel} companion={companion} />
+        )}
         {travel.status === "completed" && (
           <CompletedView travel={travel} onUpdate={onUpdateTravel} />
         )}
