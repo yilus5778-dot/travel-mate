@@ -28,7 +28,6 @@ import {
 } from "lucide-react";
 import { COMPANIONS } from "@/lib/travelmate-data";
 import {
-  applyCompanionItineraryAccents,
   buildSuggestedItinerary,
   displayTravelDate,
   TRAVEL_STATUS_LABELS,
@@ -318,30 +317,23 @@ function getDailyFoodRecommendation(
 function DailyFoodCard({ destination, day }: { destination: string | null; day: number }) {
   const food = getDailyFoodRecommendation(destination, day);
   return (
-    <div className="mt-3 rounded-[16px] bg-card/80 p-3 shadow-[var(--shadow-card)]">
-      <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-brand-soft">
-          <Utensils className="size-4 text-foreground" />
+    <div className="mt-2 rounded-[13px] bg-card/85 px-3 py-2 shadow-[var(--shadow-card)]">
+      <div className="flex items-center gap-2">
+        <div className="flex size-8 shrink-0 items-center justify-center rounded-[10px] bg-brand-soft">
+          <Utensils className="size-3.5 text-foreground" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[12px] font-semibold text-foreground">今日美食</p>
-            <Tag tone="accent">{food.timing}</Tag>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p className="shrink-0 text-[11px] font-semibold text-foreground">今日美食</p>
+            <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[9px] font-medium text-accent">
+              {food.timing}
+            </span>
+            <p className="truncate text-[10px] font-medium text-muted-foreground">{food.area}</p>
           </div>
-          <p className="mt-1 text-[11px] font-medium text-foreground">{food.area}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {food.dishes.map((dish) => (
-              <span
-                key={dish}
-                className="rounded-full bg-surface-sunk px-2 py-1 text-[9px] text-muted-foreground"
-              >
-                {dish}
-              </span>
-            ))}
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-            推荐理由：{food.reason}
+          <p className="mt-1 truncate text-[9px] text-muted-foreground">
+            {food.dishes.join(" / ")}
           </p>
+          <p className="mt-1 truncate text-[9px] text-muted-foreground">推荐理由：{food.reason}</p>
         </div>
       </div>
     </div>
@@ -670,11 +662,9 @@ function openMapSearch(title: string, destination: string | null) {
 function DayPlanEditor({
   travel,
   onPatch,
-  companion,
 }: {
   travel: TravelItem;
   onPatch: (patch: Partial<TravelItem>) => void;
-  companion?: CompanionProfile | null;
 }) {
   const itineraryDays = travel.itinerary
     .map((item) => item.day ?? 1)
@@ -690,11 +680,6 @@ function DayPlanEditor({
     if (selectedDay > dayCount) setSelectedDay(dayCount);
   }, [dayCount, selectedDay]);
 
-  const companionType = companion ? COMPANIONS[companion.key] : null;
-  const companionAddonCount = travel.itinerary.filter((item) => item.companionAccent).length;
-  const hasCurrentCompanionAddons = companion
-    ? travel.itinerary.some((item) => item.companionAccent?.key === companion.key)
-    : false;
   const baseDayItems = dayItems.filter((item) => !item.companionAccent);
 
   const updateItem = (id: string, patch: Partial<ItineraryItem>) => {
@@ -760,29 +745,9 @@ function DayPlanEditor({
     setSelectedDay(nextDay);
   };
 
-  const applyCompanionAddons = () => {
-    if (!companion) return;
-    onPatch({
-      itinerary: applyCompanionItineraryAccents(
-        travel.itinerary,
-        travel.destination,
-        travel.durationDays,
-        companion.key,
-      ),
-      aiSummary: `${
-        travel.aiSummary ?? "已生成可编辑攻略。"
-      } 已按你的${COMPANIONS[companion.key].animal}搭子加入少量彩色加料；基础路线不变，每天最多 1 个。`,
-    });
-  };
-
   const firstStop = baseDayItems[0] ?? dayItems[0] ?? null;
   const routeItems = baseDayItems.slice(0, 4);
-  const suggestedCount = dayItems.filter(
-    (item) => evidenceMeta(item.evidence, item.source, item.confirmed).label === "AI 建议",
-  ).length;
-  const confirmedCount = dayItems.filter(
-    (item) => evidenceMeta(item.evidence, item.source, item.confirmed).label === "已确认",
-  ).length;
+  const companionAddonCount = dayItems.filter((item) => item.companionAccent).length;
   const checkItems = dayItems.flatMap((item) =>
     (item.checks ?? []).map((check) => ({ id: `${item.id}-${check}`, title: item.title, check })),
   );
@@ -795,14 +760,14 @@ function DayPlanEditor({
 
   return (
     <Card className="overflow-hidden !p-0">
-      <div className="bg-brand-soft px-4 pb-4 pt-4">
+      <div className="bg-brand-soft px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <Tag tone="accent">专业攻略</Tag>
               <span className="text-[10px] text-muted-foreground">按天规划 · 可编辑</span>
             </div>
-            <h3 className="mt-3 text-[19px] font-bold text-foreground">
+            <h3 className="mt-2 text-[18px] font-bold text-foreground">
               D{selectedDay} ·{" "}
               {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
             </h3>
@@ -811,20 +776,20 @@ function DayPlanEditor({
               {selectedDay} 天
             </p>
           </div>
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-[15px] bg-card/75">
-            <Route className="size-5 text-accent" />
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-[13px] bg-card/75">
+            <Route className="size-4 text-accent" />
           </div>
         </div>
       </div>
 
-      <div className="border-b border-border px-4 py-3">
+      <div className="border-b border-border px-4 py-2.5">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {Array.from({ length: dayCount }, (_, index) => index + 1).map((day) => (
             <button
               type="button"
               key={day}
               onClick={() => setSelectedDay(day)}
-              className={`min-w-[58px] rounded-[14px] px-3 py-2.5 text-center transition-colors ${
+              className={`min-w-[52px] rounded-[13px] px-3 py-2 text-center transition-colors ${
                 selectedDay === day
                   ? "bg-primary text-primary-foreground"
                   : "bg-surface-sunk text-muted-foreground"
@@ -847,81 +812,26 @@ function DayPlanEditor({
         </div>
       </div>
 
-      <div className="px-4 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[13px] font-semibold text-foreground">当天攻略</p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">
-              用户信息、AI 推理和动态风险分开标注，不再满屏待确认。
-            </p>
-          </div>
-          <Tag>
-            {baseDayItems.length} 主线{dayItems.length > baseDayItems.length ? " · 有加料" : ""}
-          </Tag>
+      <div className="px-4 py-3">
+        <div className="flex items-center gap-2 rounded-[12px] bg-brand-soft px-3 py-2 text-[10px] text-muted-foreground">
+          <Route className="size-3.5 shrink-0 text-accent" />
+          <span className="shrink-0 font-semibold text-foreground">低折返</span>
+          <span>·</span>
+          <span>{dayIntensityLabel(baseDayItems.length)}</span>
+          <span>·</span>
+          <span>{baseDayItems.length} 主线</span>
+          {companionAddonCount > 0 && (
+            <>
+              <span>·</span>
+              <span className="font-semibold text-accent">{companionAddonCount} 个搭子加料</span>
+            </>
+          )}
         </div>
-
-        <div className="mt-3 rounded-[16px] bg-brand-soft p-3">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-[12px] bg-card/65 p-2">
-              <p className="text-[9px] text-muted-foreground">路线策略</p>
-              <p className="mt-1 text-[11px] font-semibold text-foreground">低折返</p>
-              <p className="mt-0.5 text-[8px] text-muted-foreground">AI 建议</p>
-            </div>
-            <div className="rounded-[12px] bg-card/65 p-2">
-              <p className="text-[9px] text-muted-foreground">当天强度</p>
-              <p className="mt-1 text-[11px] font-semibold text-foreground">
-                {dayIntensityLabel(baseDayItems.length)}
-              </p>
-              <p className="mt-0.5 text-[8px] text-muted-foreground">{baseDayItems.length} 主线</p>
-            </div>
-            <div className="rounded-[12px] bg-card/65 p-2">
-              <p className="text-[9px] text-muted-foreground">信息状态</p>
-              <p className="mt-1 text-[11px] font-semibold text-foreground">
-                {confirmedCount} 已确认
-              </p>
-              <p className="mt-0.5 text-[8px] text-muted-foreground">{suggestedCount} AI 建议</p>
-            </div>
-          </div>
-          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
-            当前为原型规划：路线按少折返原则排序；接入地图后会刷新真实车程、步行时间和拥挤风险。
-          </p>
-        </div>
-
-        {companionType && (
-          <div className="mt-3 rounded-[16px] border border-border bg-card/75 p-3">
-            <div className="flex items-start gap-2">
-              <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-soft text-[18px]">
-                {companionType.emoji}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-[12px] font-semibold text-foreground">搭子风格加料</p>
-                  <Tag tone={hasCurrentCompanionAddons ? "accent" : "muted"}>
-                    {hasCurrentCompanionAddons ? `${companionAddonCount} 项` : "可加入"}
-                  </Tag>
-                </div>
-                <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-                  {companionType.animal}
-                  搭子只给每天加一个以内的小安排，基础旅行计划和当日路线图不变。
-                </p>
-                {!hasCurrentCompanionAddons && (
-                  <button
-                    type="button"
-                    onClick={applyCompanionAddons}
-                    className="mt-2 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
-                  >
-                    加入{companionType.animal}搭子加料
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
 
         <DailyFoodCard destination={travel.destination} day={selectedDay} />
 
         {dayItems.length ? (
-          <div className="mt-4">
+          <div className="mt-3">
             {dayItems.map((item, index) => {
               const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
               const accentClasses = item.companionAccent
@@ -1435,12 +1345,10 @@ function DraftView({
   travel,
   onUpdate,
   onDelete,
-  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
   onDelete: (id: string) => void;
-  companion: CompanionProfile | null;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -1454,7 +1362,7 @@ function DraftView({
   return (
     <div className="space-y-3">
       {travel.itinerary.length ? (
-        <DayPlanEditor travel={travel} onPatch={patchTravel} companion={companion} />
+        <DayPlanEditor travel={travel} onPatch={patchTravel} />
       ) : (
         <Card className="text-center">
           <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-brand-soft">
@@ -1504,18 +1412,15 @@ function DraftView({
 function UpcomingView({
   travel,
   onUpdate,
-  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
-  companion: CompanionProfile | null;
 }) {
   return (
     <div className="space-y-3">
       {travel.itinerary.length > 0 && (
         <DayPlanEditor
           travel={travel}
-          companion={companion}
           onPatch={(patch) =>
             onUpdate({
               ...travel,
@@ -1533,11 +1438,6 @@ function UpcomingView({
             ? "订单提醒会对所有搭子类型生效。"
             : "添加真实订单后，这里会显示预订与提醒。"
         }
-      />
-      <EmptySection
-        icon={ClipboardList}
-        title={travel.itinerary.length ? `${travel.itinerary.length} 项行程` : "行程尚未确认"}
-        description="待出发阶段只展示清单、预订、提醒和行程确认。"
       />
       <EmptySection
         icon={Users}
@@ -1559,18 +1459,15 @@ function UpcomingView({
 function ActiveView({
   travel,
   onUpdate,
-  companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
-  companion: CompanionProfile | null;
 }) {
   return (
     <div className="space-y-3">
       {travel.itinerary.length > 0 && (
         <DayPlanEditor
           travel={travel}
-          companion={companion}
           onPatch={(patch) =>
             onUpdate({
               ...travel,
@@ -2395,19 +2292,14 @@ export function TripsTab({
           <DraftView
             travel={travel}
             onUpdate={onUpdateTravel}
-            companion={companion}
             onDelete={(id) => {
               onDeleteTravel(id);
               setView("home");
             }}
           />
         )}
-        {travel.status === "upcoming" && (
-          <UpcomingView travel={travel} onUpdate={onUpdateTravel} companion={companion} />
-        )}
-        {travel.status === "active" && (
-          <ActiveView travel={travel} onUpdate={onUpdateTravel} companion={companion} />
-        )}
+        {travel.status === "upcoming" && <UpcomingView travel={travel} onUpdate={onUpdateTravel} />}
+        {travel.status === "active" && <ActiveView travel={travel} onUpdate={onUpdateTravel} />}
         {travel.status === "completed" && (
           <CompletedView travel={travel} onUpdate={onUpdateTravel} />
         )}
