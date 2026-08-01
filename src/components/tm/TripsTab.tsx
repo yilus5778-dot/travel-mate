@@ -174,18 +174,20 @@ function StopImageCard({
       role="img"
       aria-label={`${title} 图片`}
       className={`relative overflow-hidden rounded-[14px] bg-gradient-to-br ${visual.tone} ${
-        compact ? "mb-2 h-20" : "mb-3 h-24"
+        compact ? "mb-2 h-14" : "mb-3 h-24"
       }`}
     >
       <div className="absolute -right-8 -top-10 size-28 rounded-full bg-card/45" />
       <div className="absolute -bottom-10 left-8 h-20 w-44 -rotate-6 rounded-full border-[10px] border-card/35" />
-      <div className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
+      <div className="absolute left-3 top-2.5 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
         <Camera className="size-3" />
         图片
       </div>
-      <div className="absolute bottom-3 left-3 right-3">
-        <p className="text-[18px] leading-none">{visual.emoji}</p>
-        <p className="mt-1 truncate text-[11px] font-semibold text-foreground">{visual.label}</p>
+      <div className="absolute bottom-2.5 left-3 right-3">
+        <p className={compact ? "text-[14px] leading-none" : "text-[18px] leading-none"}>
+          {visual.emoji}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] font-semibold text-foreground">{visual.label}</p>
       </div>
     </div>
   );
@@ -994,14 +996,14 @@ function DayPlanEditor({
 
   return (
     <Card className="overflow-hidden !p-0">
-      <div className="bg-brand-soft px-4 py-3">
+      <div className="bg-brand-soft px-4 py-2.5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Tag tone="accent">专业攻略</Tag>
+              <Tag tone="accent">行程规划</Tag>
               <span className="text-[10px] text-muted-foreground">按天规划 · 可编辑</span>
             </div>
-            <h3 className="mt-2 text-[18px] font-bold text-foreground">
+            <h3 className="mt-1.5 text-[17px] font-bold text-foreground">
               D{selectedDay} ·{" "}
               {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
             </h3>
@@ -1099,7 +1101,7 @@ function DayPlanEditor({
                         accentClasses ? accentClasses.card : "bg-surface-sunk"
                       }`}
                     >
-                      <StopImageCard title={item.title} destination={travel.destination} />
+                      <StopImageCard title={item.title} destination={travel.destination} compact />
                       <div className="flex items-start gap-2">
                         {item.companionAccent ? (
                           <span className="mt-[-1px] shrink-0 text-[16px]">
@@ -2519,6 +2521,18 @@ export function TripsTab({
 
   if (!travel) return null;
 
+  const showPlanFirst = travel.status === "draft" && travel.itinerary.length > 0;
+  const tripHeroCard = (
+    <TripHeroCard
+      travel={travel}
+      onUpdate={onUpdateTravel}
+      onOpenChecklist={() => setView("checklist")}
+      onOpenAccounting={() => setView("accounting")}
+      onOpenGroupShare={() => startGroupShare(travel, "trip")}
+      companion={companion}
+    />
+  );
+
   return (
     <MiniShell
       title={travel.title}
@@ -2527,14 +2541,7 @@ export function TripsTab({
       onBack={() => setView("home")}
     >
       <div className="space-y-4 px-5 pb-8 pt-1">
-        <TripHeroCard
-          travel={travel}
-          onUpdate={onUpdateTravel}
-          onOpenChecklist={() => setView("checklist")}
-          onOpenAccounting={() => setView("accounting")}
-          onOpenGroupShare={() => startGroupShare(travel, "trip")}
-          companion={companion}
-        />
+        {!showPlanFirst && tripHeroCard}
         {travel.status === "draft" && (
           <DraftView
             travel={travel}
@@ -2545,6 +2552,7 @@ export function TripsTab({
             }}
           />
         )}
+        {showPlanFirst && tripHeroCard}
         {travel.status === "upcoming" && <UpcomingView travel={travel} onUpdate={onUpdateTravel} />}
         {travel.status === "active" && <ActiveView travel={travel} onUpdate={onUpdateTravel} />}
         {travel.status === "completed" && (
