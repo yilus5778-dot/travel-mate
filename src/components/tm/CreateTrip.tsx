@@ -9,7 +9,6 @@ import {
   Link2,
   LoaderCircle,
   MapPin,
-  MessageCircleQuestion,
   Route,
   Sparkles,
   Trash2,
@@ -173,7 +172,7 @@ export function CreateTrip({
     setAiSummary(
       `根据“${destinationPreference || selectedDestination || "目的地待定"}”、${
         dateLabel || "时间待定"
-      }和 ${days} 天，我先生成一版可编辑方案。地点与安排均为 AI 建议，不会冒充你已确认的信息。`,
+      }和 ${days} 天，我先生成一版可编辑攻略：包含具体地点、建议时间、路线取舍和交通提醒。所有内容仍是 AI 建议，不会冒充你已确认的信息。`,
     );
     setStep("preview");
   };
@@ -359,26 +358,6 @@ export function CreateTrip({
 
         {step === "questions" && (
           <>
-            <Card>
-              <div className="flex items-center justify-between">
-                <Tag tone="accent">AI 判断：从零规划</Tag>
-                <MessageCircleQuestion className="size-4 text-muted-foreground" />
-              </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-foreground/80">
-                {destinationPreference
-                  ? `“${destinationPreference}”是目的地偏好，不是具体城市。`
-                  : destination
-                    ? `已识别具体目的地“${destination}”。`
-                    : "暂未识别具体目的地，可以先生成框架，之后再补。"}
-                {durationDays ? ` 已识别行程时长 ${durationDays} 天。` : " 行程时长待补充。"}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Tag>{dateLabel || "时间待确认"}</Tag>
-                <Tag>{durationDays ? `${durationDays} 天` : "时长待确认"}</Tag>
-                <Tag>{peopleCount ? `${peopleCount} 人` : "人数待确认"}</Tag>
-              </div>
-            </Card>
-
             {destinationCandidates.length > 0 && (
               <Card>
                 <p className="text-[13px] font-semibold text-foreground">AI 推荐候选地</p>
@@ -500,19 +479,36 @@ export function CreateTrip({
                       <span className="mt-1 shrink-0 text-[10px] font-semibold text-muted-foreground">
                         D{item.day ?? index + 1}
                       </span>
-                      <input
-                        value={item.title}
-                        onChange={(event) =>
-                          setItinerary((current) =>
-                            current.map((entry) =>
-                              entry.id === item.id
-                                ? { ...entry, title: event.target.value }
-                                : entry,
-                            ),
-                          )
-                        }
-                        className="min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none"
-                      />
+                      <div className="min-w-0 flex-1">
+                        <input
+                          value={item.title}
+                          onChange={(event) =>
+                            setItinerary((current) =>
+                              current.map((entry) =>
+                                entry.id === item.id
+                                  ? { ...entry, title: event.target.value }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          className="w-full bg-transparent text-[12px] font-semibold text-foreground outline-none"
+                        />
+                        <textarea
+                          value={item.detail ?? ""}
+                          onChange={(event) =>
+                            setItinerary((current) =>
+                              current.map((entry) =>
+                                entry.id === item.id
+                                  ? { ...entry, detail: event.target.value || null }
+                                  : entry,
+                              ),
+                            )
+                          }
+                          rows={2}
+                          placeholder="补充路线、交通、取舍或预约提醒"
+                          className="mt-1 w-full resize-none bg-transparent text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
+                        />
+                      </div>
                       <Tag tone={item.source === "ai" ? "accent" : "muted"}>
                         {item.source === "ai" ? "AI 建议" : "来自原文"}
                       </Tag>

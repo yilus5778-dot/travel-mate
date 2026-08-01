@@ -406,6 +406,7 @@ function DayPlanEditor({
           day: selectedDay,
           time: lastTime ?? "16:00",
           title: "待编辑的新行程",
+          detail: null,
           confirmed: false,
           source: "user",
         },
@@ -425,6 +426,7 @@ function DayPlanEditor({
           day: nextDay,
           time: "09:00",
           title: "待编辑的新行程",
+          detail: null,
           confirmed: false,
           source: "user",
         },
@@ -541,6 +543,15 @@ function DayPlanEditor({
                         <Trash2 className="size-3.5 text-muted-foreground" />
                       </button>
                     </div>
+                    <textarea
+                      value={item.detail ?? ""}
+                      onChange={(event) =>
+                        updateItem(item.id, { detail: event.target.value || null })
+                      }
+                      rows={2}
+                      placeholder="补充路线、交通、预约或取舍提醒"
+                      className="mt-2 w-full resize-none rounded-[10px] bg-card/55 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
+                    />
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <Tag tone={item.source === "ai" ? "accent" : "muted"}>
                         {item.source === "ai" ? "AI 建议" : "用户添加"}
@@ -675,7 +686,7 @@ function TripHeroCard({
       aiPlanStatus: "generated",
       aiSummary: `已根据“${
         travel.destinationPreference || travel.destination || "当前旅行想法"
-      }”生成 ${days} 天可编辑方案。所有新增行程均标注为 AI 建议，等待你确认。`,
+      }”生成 ${days} 天可编辑攻略。每站包含具体地点、路线取舍和交通提醒，并继续标注为 AI 建议，等待你确认。`,
     });
   };
 
@@ -1352,6 +1363,7 @@ function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
         lines.push(
           `${item.time ?? "时间待定"} · ${item.title}${item.confirmed ? "" : "（待确认）"}`,
         );
+        if (item.detail) lines.push(`  ${item.detail}`);
       });
     }
   }

@@ -24,6 +24,7 @@ export interface ItineraryItem {
   day: number | null;
   time: string | null;
   title: string;
+  detail?: string | null;
   confirmed: boolean;
   source: "user" | "ai";
 }
@@ -168,6 +169,7 @@ const DESTINATIONS = [
   "南京",
   "长沙",
   "福州",
+  "大同",
 ];
 
 const DESTINATION_PREFERENCES = ["海边", "海岛", "山里", "草原", "古镇", "温泉", "滑雪"];
@@ -279,28 +281,333 @@ export function getDestinationCandidates(preference: string | null) {
   return [];
 }
 
-const ITINERARY_TEMPLATES: Record<string, string[][]> = {
+interface ItineraryTemplateStop {
+  time: string;
+  title: string;
+  detail: string;
+}
+
+const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
+  大同: [
+    [
+      {
+        time: "10:30",
+        title: "大同古城鼓楼住宿区",
+        detail: "先放行李，住宿尽量选古城内或鼓楼周边；下午步行串联古城景点，少走回头路。",
+      },
+      {
+        time: "14:00",
+        title: "华严寺",
+        detail:
+          "三个点都在古城范围内，适合半天步行；华严寺预留 1.5 小时，善化寺和九龙壁按体力取舍。",
+      },
+      {
+        time: "18:30",
+        title: "鼓楼东西街",
+        detail: "晚餐可安排刀削面、烧麦、浑源凉粉；饭后看城墙和鼓楼夜景，第一天不再安排远途。",
+      },
+    ],
+    [
+      {
+        time: "08:30",
+        title: "云冈石窟",
+        detail: "从市区出发，预留 3–4 小时；重点看第 5、6、20 窟。门票和开放时间出发前再确认。",
+      },
+      {
+        time: "13:30",
+        title: "大同博物馆",
+        detail: "云冈回来后安排室内点，降低疲劳；如果预约不上，就改成古城咖啡休息和补逛。",
+      },
+      {
+        time: "18:00",
+        title: "古城墙夜游",
+        detail: "晚上节奏放轻，适合拍照和散步；第二天已经有远途，避免继续塞满景点。",
+      },
+    ],
+    [
+      {
+        time: "08:00",
+        title: "悬空寺",
+        detail: "距离市区较远，建议包车或一日游；旺季尽量提前预约，现场排队时间要留余量。",
+      },
+      {
+        time: "11:30",
+        title: "恒山",
+        detail: "体力够就继续恒山，不想爬山就改成浑源午餐和轻松返城；不要两边都硬赶。",
+      },
+      {
+        time: "16:30",
+        title: "回大同取行李返程",
+        detail: "从浑源回市区时间不短，返程车票或航班建议留出至少 2 小时机动。",
+      },
+    ],
+  ],
   厦门: [
-    ["抵达厦门与办理入住", "环岛路慢游", "曾厝垵夜间散步"],
-    ["鼓浪屿轮渡与登岛", "鼓浪屿核心街区", "海边日落与返程"],
-    ["沙坡尾散步", "八市在地体验", "收拾行李与返程"],
+    [
+      {
+        time: "10:30",
+        title: "中山路住宿区",
+        detail: "先寄存或办理入住；住在中山路、沙坡尾或厦大周边，晚上吃饭和散步都方便。",
+      },
+      {
+        time: "14:00",
+        title: "沙坡尾艺术西区",
+        detail: "两个点步行可串联，适合第一天下午慢逛；导航先到沙坡尾艺术西区。",
+      },
+      {
+        time: "18:30",
+        title: "中山路步行街",
+        detail: "晚餐后沿鹭江道看鼓浪屿夜景；第一天不登岛，避免交通太赶。",
+      },
+    ],
+    [
+      {
+        time: "08:30",
+        title: "厦鼓码头",
+        detail: "船票建议提前买；岛上主要靠步行，穿舒服的鞋，上午登岛体验更稳。",
+      },
+      {
+        time: "10:00",
+        title: "鼓浪屿龙头路",
+        detail: "按这个顺序走比较顺；想轻松就只保留最美转角和龙头路，菽庄花园作为加选。",
+      },
+      {
+        time: "17:30",
+        title: "返程厦门岛内，白城沙滩看日落",
+        detail: "如果当天风大或太累，直接返程去中山路吃饭；日落点作为弹性安排。",
+      },
+    ],
+    [
+      {
+        time: "09:00",
+        title: "南普陀寺",
+        detail: "厦大入校政策以当天为准；不确定时把南普陀作为稳定主点，周边轻松走。",
+      },
+      {
+        time: "12:00",
+        title: "八市",
+        detail: "午餐别排太满，八市适合边逛边吃；贵重海鲜先问清价格再点。",
+      },
+      {
+        time: "15:30",
+        title: "取行李返程",
+        detail: "去机场或车站至少预留 90 分钟；如果时间多，再补一个咖啡店或伴手礼点。",
+      },
+    ],
   ],
   青岛: [
-    ["抵达青岛与办理入住", "老城街区散步", "海边夜景"],
-    ["崂山方向核心体验", "海岸线慢游", "晚间自由活动"],
-    ["八大关散步", "在地市场体验", "收拾行李与返程"],
+    [
+      {
+        time: "10:30",
+        title: "栈桥住宿区",
+        detail: "想逛老城住栈桥附近，想看海岸线住五四广场附近；先放行李再开始走。",
+      },
+      {
+        time: "14:00",
+        title: "栈桥",
+        detail: "老城经典步行线，信号山可以俯看红瓦绿树；下坡后就近吃晚饭。",
+      },
+      {
+        time: "19:00",
+        title: "五四广场",
+        detail: "晚上看海风舒服但会冷，带外套；两个点沿海步行或短途打车都可以。",
+      },
+    ],
+    [
+      {
+        time: "08:00",
+        title: "崂山",
+        detail: "崂山需要完整半天到一天；想看海山选仰口，想经典道观线选太清，别两条都硬塞。",
+      },
+      {
+        time: "15:30",
+        title: "小麦岛公园",
+        detail: "崂山返程后安排轻量海边点，适合日落；如果太累可直接取消。",
+      },
+      {
+        time: "18:30",
+        title: "台东步行街晚餐",
+        detail: "选择多、收尾方便；海鲜和小吃都能解决，不用再跨城找餐厅。",
+      },
+    ],
+    [
+      {
+        time: "09:00",
+        title: "八大关",
+        detail: "上午散步拍照更舒服；八大关和二浴连在一起，适合返程前半天。",
+      },
+      {
+        time: "12:30",
+        title: "青岛啤酒博物馆",
+        detail: "想室内体验选啤酒博物馆，想轻松拍照选大学路；根据返程时间取舍。",
+      },
+      {
+        time: "16:00",
+        title: "取行李返程",
+        detail: "青岛站靠近老城，青岛北站距离较远；返程前确认车站，预留交通时间。",
+      },
+    ],
   ],
   北海: [
-    ["抵达北海与办理入住", "银滩慢游", "海边日落"],
-    ["涠洲岛方向出发", "岛上核心体验", "晚间自由活动"],
-    ["北海老街散步", "在地午餐体验", "收拾行李与返程"],
+    [
+      {
+        time: "10:30",
+        title: "银滩住宿区",
+        detail: "想看海住银滩，想吃饭方便住侨港；先放行李，下午轻松适应海边节奏。",
+      },
+      {
+        time: "15:30",
+        title: "北海银滩",
+        detail: "下午到傍晚最适合散步拍照；防晒和拖鞋提前准备，别把贵重物品留沙滩。",
+      },
+      {
+        time: "18:30",
+        title: "侨港风情街晚餐",
+        detail: "晚餐集中解决海鲜、糖水和越南小吃；点海鲜前确认计价方式。",
+      },
+    ],
+    [
+      {
+        time: "08:30",
+        title: "北海国际客运港",
+        detail: "船票受天气影响，提前确认开航；上岛后先安排交通和行李。",
+      },
+      {
+        time: "11:00",
+        title: "鳄鱼山景区",
+        detail: "鳄鱼山是岛上核心点，预留 2 小时；下午去滴水丹屏看海边景观。",
+      },
+      {
+        time: "17:30",
+        title: "石螺口海滩",
+        detail: "看日落选石螺口，吃饭方便选南湾街；当天不要再跨太多点。",
+      },
+    ],
+    [
+      {
+        time: "09:30",
+        title: "北海老街",
+        detail: "返程前安排老街最稳；适合买伴手礼和慢慢吃早午餐。",
+      },
+      {
+        time: "12:30",
+        title: "冠头岭国家森林公园",
+        detail: "时间紧选外沙岛，想看海景选冠头岭；根据返程交通决定。",
+      },
+      {
+        time: "16:00",
+        title: "取行李返程",
+        detail: "北海机场离市区有距离，返程前至少预留 90 分钟交通时间。",
+      },
+    ],
+  ],
+  大理: [
+    [
+      {
+        time: "10:30",
+        title: "大理古城住宿区",
+        detail: "想逛街住古城，想看洱海住才村；先放行李，第一天别安排环海大移动。",
+      },
+      {
+        time: "14:00",
+        title: "大理古城人民路",
+        detail: "步行慢逛即可，适合适应海拔和节奏；想拍照可顺路去五华楼。",
+      },
+      {
+        time: "18:30",
+        title: "洱海门",
+        detail: "晚餐后轻松散步，不建议第一晚骑车太远；保留体力给第二天环海。",
+      },
+    ],
+    [
+      {
+        time: "09:00",
+        title: "喜洲古镇",
+        detail: "上午去更舒服，可安排喜洲粑粑和稻田拍照；导航到喜洲古镇游客中心。",
+      },
+      {
+        time: "13:30",
+        title: "海舌公园",
+        detail: "按开放和天气选择；海边风大，骑行或包车都要留出返程时间。",
+      },
+      {
+        time: "17:30",
+        title: "洱海生态廊道日落",
+        detail: "把日落作为当天重点，不再加太多景点；骑行注意还车点。",
+      },
+    ],
+    [
+      {
+        time: "09:00",
+        title: "崇圣寺三塔",
+        detail: "返程前选一个稳定核心景点，预留 1.5–2 小时；门票信息当天确认。",
+      },
+      {
+        time: "12:30",
+        title: "大理古城",
+        detail: "把午餐和买东西合并，避免返程前多点折返。",
+      },
+      {
+        time: "15:30",
+        title: "取行李返程",
+        detail: "大理站到古城有距离，返程至少预留 60–90 分钟路程。",
+      },
+    ],
   ],
 };
 
-const GENERIC_DAY_PLANS = [
-  ["抵达与办理入住", "目的地周边轻量探索", "晚间自由活动"],
-  ["当地核心体验", "午后弹性安排", "晚餐与夜间散步"],
-  ["补充未完成体验", "伴手礼与自由活动", "收拾行李与返程"],
+const GENERIC_DAY_PLANS: ItineraryTemplateStop[][] = [
+  [
+    {
+      time: "10:30",
+      title: "抵达与办理入住",
+      detail: "先确认车站/机场到住宿的路线；住宿位置待定时，优先选交通和吃饭都方便的中心区。",
+    },
+    {
+      time: "14:00",
+      title: "住宿周边轻量探索",
+      detail: "把第一天下午控制在住宿附近 2–3 公里内，先适应城市，不安排远距离折返。",
+    },
+    {
+      time: "18:30",
+      title: "第一顿正餐与夜间散步",
+      detail: "选择离住宿近的餐区；餐后只安排一个夜景或散步点，避免到达日太累。",
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "当天核心景点",
+      detail: "填入一个最想去的核心景点后再导航；上午留给最重要的点，降低排队和交通不确定性。",
+    },
+    {
+      time: "13:30",
+      title: "核心景点附近午餐与补充点",
+      detail: "午餐尽量选在上一站附近，下午只加一个顺路点；不要跨城来回跑。",
+    },
+    {
+      time: "18:30",
+      title: "晚餐与夜间轻松安排",
+      detail: "晚上只保留餐区、夜市或江边散步这类低强度安排；根据体力随时删除。",
+    },
+  ],
+  [
+    {
+      time: "09:30",
+      title: "返程前补充体验",
+      detail: "选择一个离住宿或返程交通近的景点；不安排需要长时间排队的项目。",
+    },
+    {
+      time: "12:30",
+      title: "午餐与伴手礼",
+      detail: "把吃饭、买东西和取行李串在一起，减少返程前折返。",
+    },
+    {
+      time: "15:30",
+      title: "取行李返程",
+      detail: "根据车站/机场位置预留 60–120 分钟交通时间；具体返程时间待确认。",
+    },
+  ],
 ];
 
 const SUGGESTED_TIMES = ["09:00", "13:30", "18:00"];
@@ -313,14 +620,33 @@ export function buildSuggestedItinerary(
   const template = destination ? ITINERARY_TEMPLATES[destination] : undefined;
 
   return Array.from({ length: days }, (_, dayIndex) => {
-    const fallback = GENERIC_DAY_PLANS[dayIndex] ?? ["早餐与出发", "当天核心体验", "晚间自由活动"];
+    const fallback =
+      GENERIC_DAY_PLANS[dayIndex] ??
+      ([
+        {
+          time: "09:30",
+          title: `${destination ?? "目的地"}第 ${dayIndex + 1} 天核心安排`,
+          detail: "这一天的具体地点待补充；先保留一个上午核心点、一个下午顺路点和一个晚间轻松点。",
+        },
+        {
+          time: "13:30",
+          title: "顺路午餐与补充体验",
+          detail: "午餐尽量放在上午点附近；下午只添加顺路地点，避免路线来回跳。",
+        },
+        {
+          time: "18:30",
+          title: "晚间休整",
+          detail: "根据体力安排夜景、餐区或回酒店休息；不强行塞满。",
+        },
+      ] satisfies ItineraryTemplateStop[]);
     const dayPlan = template?.[dayIndex] ?? fallback;
 
-    return dayPlan.map((title, itemIndex) => ({
+    return dayPlan.map((stop, itemIndex) => ({
       id: `ai-itinerary-${Date.now()}-${dayIndex}-${itemIndex}`,
       day: dayIndex + 1,
-      time: SUGGESTED_TIMES[itemIndex] ?? null,
-      title,
+      time: stop.time || SUGGESTED_TIMES[itemIndex] || null,
+      title: stop.title,
+      detail: stop.detail,
       confirmed: false,
       source: "ai" as const,
     }));
@@ -339,6 +665,7 @@ export function organizePastedItinerary(textValue: string): ItineraryItem[] {
     day: index + 1,
     time: line.match(/\b\d{1,2}:\d{2}\b/)?.[0] ?? null,
     title: line.replace(/^(?:D\d+|Day\s*\d+|第[一二三四五六七八九十\d]+天)[:：\s-]*/i, ""),
+    detail: null,
     confirmed: false,
     source: "user",
   }));
@@ -436,6 +763,7 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
     itinerary: (travel.itinerary ?? []).map((item, index) => ({
       ...item,
       day: item.day ?? index + 1,
+      detail: item.detail ?? null,
       source: item.source ?? "user",
     })),
     expenses: (travel.expenses ?? []).map((expense) => ({
