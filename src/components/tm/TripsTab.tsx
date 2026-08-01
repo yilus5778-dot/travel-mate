@@ -1315,7 +1315,6 @@ function TripHeroCard({
   const isDraft = travel.status === "draft";
   const dateLabel = displayTravelDate(travel.dateText, travel.durationDays);
   const canShare = Boolean(travel.destination) && travel.itinerary.length > 0;
-  const totalExpense = travel.expenses.reduce((sum, item) => sum + item.amount, 0);
   const packingItems = getPackingItems(travel);
   const packing = packingProgress(packingItems);
 
@@ -1365,26 +1364,35 @@ function TripHeroCard({
 
   return (
     <Card className="relative overflow-hidden !p-0">
-      <div className="absolute -right-16 -top-16 size-48 rounded-full bg-brand-soft" />
-      <div className="absolute right-8 top-10 flex size-16 items-center justify-center rounded-full bg-card/70">
-        <Navigation className="size-6 text-accent" />
-      </div>
-      <div className="relative p-5">
-        <div className="min-w-0">
-          <Tag tone={travel.status === "active" ? "accent" : "brand"}>
-            {TRAVEL_STATUS_LABELS[travel.status]}
-          </Tag>
-          <p className="mt-4 text-[11px] font-medium text-muted-foreground">
-            {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
-          </p>
-          <h2 className="mt-1 max-w-[13.5rem] text-[24px] font-bold leading-snug text-foreground">
-            {travel.title}
-          </h2>
+      <div className="absolute -right-12 -top-16 size-32 rounded-full bg-brand-soft" />
+      <div className="relative px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <Tag tone={travel.status === "active" ? "accent" : "brand"}>
+                {TRAVEL_STATUS_LABELS[travel.status]}
+              </Tag>
+              <input
+                value={travel.destination ?? travel.destinationPreference ?? ""}
+                onChange={(event) => patchTravel({ destination: event.target.value || null })}
+                placeholder="目的地待确定"
+                className="min-w-0 flex-1 bg-transparent text-[11px] font-medium text-muted-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <input
+              value={travel.title}
+              onChange={(event) => patchTravel({ title: event.target.value || "未命名旅行草稿" })}
+              className="mt-1 w-full bg-transparent text-[18px] font-bold leading-tight text-foreground outline-none"
+            />
+          </div>
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card/75">
+            <Navigation className="size-4 text-accent" />
+          </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-3 gap-2">
-          <label className="rounded-[13px] bg-surface-sunk p-2.5">
-            <CalendarDays className="size-3.5 text-muted-foreground" />
+        <div className="mt-2 flex items-center gap-2 overflow-x-auto border-y border-border/70 py-2">
+          <label className="flex min-w-[7.3rem] items-center gap-1 text-[10px] text-muted-foreground">
+            <CalendarDays className="size-3.5 shrink-0" />
             <input
               value={dateLabel ?? ""}
               onChange={(event) =>
@@ -1394,124 +1402,106 @@ function TripHeroCard({
                 })
               }
               placeholder="日期待定"
-              className="mt-1 w-full bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent font-medium text-foreground outline-none placeholder:text-muted-foreground"
             />
           </label>
-          <label className="rounded-[13px] bg-surface-sunk p-2.5">
-            <Users className="size-3.5 text-muted-foreground" />
-            <div className="mt-1 flex items-center gap-1">
-              <input
-                type="number"
-                min={1}
-                value={travel.peopleCount ?? ""}
-                onChange={(event) =>
-                  patchTravel({
-                    peopleCount: event.target.value ? Number(event.target.value) : null,
-                  })
-                }
-                placeholder="人数"
-                className="min-w-0 flex-1 bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
-              />
-              <span className="text-[10px] font-medium text-foreground">人</span>
-            </div>
+          <span className="h-3 w-px shrink-0 bg-border" />
+          <label className="flex min-w-[3.8rem] items-center gap-1 text-[10px] text-muted-foreground">
+            <Users className="size-3.5 shrink-0" />
+            <input
+              type="number"
+              min={1}
+              value={travel.peopleCount ?? ""}
+              onChange={(event) =>
+                patchTravel({
+                  peopleCount: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              placeholder="人数"
+              className="w-6 bg-transparent font-medium text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            <span className="font-medium text-foreground">人</span>
           </label>
-          <label className="rounded-[13px] bg-surface-sunk p-2.5">
-            <ClipboardList className="size-3.5 text-muted-foreground" />
-            <div className="mt-1 flex items-center gap-1">
-              <input
-                type="number"
-                min={1}
-                value={travel.durationDays ?? ""}
-                onChange={(event) =>
-                  patchTravel({
-                    durationDays: event.target.value ? Number(event.target.value) : null,
-                  })
-                }
-                placeholder="天数"
-                className="min-w-0 flex-1 bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
-              />
-              <span className="text-[10px] font-medium text-foreground">
-                天 · {travel.itinerary.length ? `${travel.itinerary.length}项` : "待生成"}
-              </span>
-            </div>
+          <span className="h-3 w-px shrink-0 bg-border" />
+          <label className="flex min-w-[6.4rem] items-center gap-1 text-[10px] text-muted-foreground">
+            <Clock3 className="size-3.5 shrink-0" />
+            <input
+              type="number"
+              min={1}
+              value={travel.durationDays ?? ""}
+              onChange={(event) =>
+                patchTravel({
+                  durationDays: event.target.value ? Number(event.target.value) : null,
+                })
+              }
+              placeholder="天数"
+              className="w-6 bg-transparent font-medium text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            <span className="font-medium text-foreground">
+              天 · {travel.itinerary.length ? `${travel.itinerary.length}项` : "待生成"}
+            </span>
           </label>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          {travel.itinerary.length === 0 && (
+            <button
+              type="button"
+              onClick={generatePlan}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
+            >
+              <Sparkles className="size-3.5" /> 生成行程
+            </button>
+          )}
           <button
             type="button"
             onClick={onOpenChecklist}
-            className="relative rounded-[13px] bg-surface-sunk p-3 text-left"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] font-semibold text-foreground"
           >
-            <ClipboardList className="size-4 text-accent" />
-            <p className="mt-2 text-[9px] text-muted-foreground">旅行清单</p>
-            <p className="mt-0.5 text-[12px] font-bold text-foreground">
-              {packing.checked
-                ? `${packing.checked}/${packing.total} 已准备`
-                : `${packing.total} 项建议`}
-            </p>
-            <p className="mt-1 truncate text-[9px] text-muted-foreground">
-              {clothingSummary(packingItems)}
-            </p>
+            <ClipboardList className="size-3.5 text-accent" />
+            清单 {packing.total ? `${packing.checked}/${packing.total}` : "待生成"}
           </button>
           <button
             type="button"
             onClick={onOpenAccounting}
-            className="relative rounded-[13px] bg-brand-soft p-3 text-left"
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-soft px-3 py-1.5 text-[10px] font-semibold text-foreground"
           >
-            <CircleDollarSign className="size-4 text-accent" />
-            <p className="mt-2 text-[9px] text-muted-foreground">记账</p>
-            <p className="mt-0.5 text-[12px] font-bold text-foreground">
-              {travel.expenses.length
-                ? `${travel.expenses.length} 笔 · ${formatMoney(totalExpense)}`
-                : "开始共同账本"}
-            </p>
-            <span className="absolute right-2 top-2 rounded-full bg-card/80 px-2 py-0.5 text-[8px] font-semibold text-accent">
-              重要
-            </span>
+            <CircleDollarSign className="size-3.5 text-accent" />
+            记账 {travel.expenses.length ? `${travel.expenses.length}笔` : "0笔"}
           </button>
-        </div>
-
-        {canShare && (
-          <div className="mt-3 border-t border-border pt-3">
+          {canShare && (
             <button
               type="button"
               onClick={onOpenGroupShare}
-              className="flex w-full items-center justify-center gap-1.5 rounded-[12px] bg-primary py-2.5 text-[10px] font-semibold text-primary-foreground"
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
             >
-              <Share2 className="size-3.5" /> 分享行程到群
+              <Share2 className="size-3.5" /> 分享到群
             </button>
-          </div>
-        )}
+          )}
+        </div>
 
         {isDraft && (
-          <div className="mt-3 rounded-[15px] bg-card/70 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-foreground">图片 / 网页链接</p>
-              <span className="text-[9px] text-muted-foreground">
-                {travel.sources.length ? `${travel.sources.length} 份资料` : "可选"}
-              </span>
-            </div>
-            <div className="mt-3 grid grid-cols-[0.8fr_1.2fr] gap-2">
+          <div className="mt-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                className="flex items-center justify-center gap-1 rounded-[11px] bg-surface-sunk py-2 text-[10px] font-medium text-foreground"
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] font-medium text-foreground"
               >
-                <ImageUp className="size-3.5" /> 上传图片
+                <ImageUp className="size-3.5" /> 图片
               </button>
-              <div className="flex gap-1">
+              <div className="flex min-w-0 flex-1 gap-1">
                 <input
                   value={link}
                   onChange={(event) => setLink(event.target.value)}
                   placeholder="粘贴网页链接"
-                  className="min-w-0 flex-1 rounded-[11px] bg-surface-sunk px-2 text-[10px] outline-none"
+                  className="min-w-0 flex-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] outline-none"
                 />
                 <button
                   type="button"
                   onClick={addLink}
                   aria-label="添加网页链接"
-                  className="rounded-[10px] bg-brand-soft px-2"
+                  className="rounded-full bg-brand-soft px-2.5"
                 >
                   <Link2 className="size-3.5" />
                 </button>
@@ -1542,18 +1532,18 @@ function TripHeroCard({
             />
             {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
             {travel.sources.length > 0 && (
-              <div className="mt-3 space-y-1">
+              <div className="mt-1.5 flex gap-1 overflow-x-auto">
                 {travel.sources.map((source) => (
                   <div
                     key={source.id}
-                    className="flex items-center gap-2 rounded-[10px] bg-surface-sunk px-2 py-1.5"
+                    className="flex max-w-[9rem] shrink-0 items-center gap-1 rounded-full bg-card/80 px-2 py-1"
                   >
                     {source.kind === "image" ? (
                       <ImageUp className="size-3 text-muted-foreground" />
                     ) : (
                       <Link2 className="size-3 text-muted-foreground" />
                     )}
-                    <span className="min-w-0 flex-1 truncate text-[10px] text-foreground">
+                    <span className="min-w-0 flex-1 truncate text-[9px] text-foreground">
                       {source.name}
                     </span>
                     <button
@@ -2521,18 +2511,6 @@ export function TripsTab({
 
   if (!travel) return null;
 
-  const showPlanFirst = travel.status === "draft" && travel.itinerary.length > 0;
-  const tripHeroCard = (
-    <TripHeroCard
-      travel={travel}
-      onUpdate={onUpdateTravel}
-      onOpenChecklist={() => setView("checklist")}
-      onOpenAccounting={() => setView("accounting")}
-      onOpenGroupShare={() => startGroupShare(travel, "trip")}
-      companion={companion}
-    />
-  );
-
   return (
     <MiniShell
       title={travel.title}
@@ -2541,7 +2519,14 @@ export function TripsTab({
       onBack={() => setView("home")}
     >
       <div className="space-y-4 px-5 pb-8 pt-1">
-        {!showPlanFirst && tripHeroCard}
+        <TripHeroCard
+          travel={travel}
+          onUpdate={onUpdateTravel}
+          onOpenChecklist={() => setView("checklist")}
+          onOpenAccounting={() => setView("accounting")}
+          onOpenGroupShare={() => startGroupShare(travel, "trip")}
+          companion={companion}
+        />
         {travel.status === "draft" && (
           <DraftView
             travel={travel}
@@ -2552,7 +2537,6 @@ export function TripsTab({
             }}
           />
         )}
-        {showPlanFirst && tripHeroCard}
         {travel.status === "upcoming" && <UpcomingView travel={travel} onUpdate={onUpdateTravel} />}
         {travel.status === "active" && <ActiveView travel={travel} onUpdate={onUpdateTravel} />}
         {travel.status === "completed" && (
