@@ -23,6 +23,7 @@ import {
   getDestinationCandidates,
   isMeaningfulIdea,
   organizePastedItinerary,
+  type ItineraryEvidence,
   type ItineraryItem,
   type PlanningMode,
   type SourceItem,
@@ -35,8 +36,22 @@ type Step = "input" | "analyzing" | "questions" | "preview";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function pendingLabel(value: string | number | null) {
-  return value === null || value === "" ? "待确认" : String(value);
+function valueOrFallback(value: string | number | null, fallback = "可稍后补") {
+  return value === null || value === "" ? fallback : String(value);
+}
+
+function evidenceMeta(
+  evidence: ItineraryEvidence | undefined,
+  source: "user" | "ai",
+  confirmed?: boolean,
+): { label: string; tone: "muted" | "brand" | "accent" } {
+  const finalEvidence = confirmed
+    ? "confirmed"
+    : (evidence ?? (source === "user" ? "confirmed" : "suggested"));
+  if (finalEvidence === "confirmed") return { label: "已确认", tone: "brand" };
+  if (finalEvidence === "queried") return { label: "已查询", tone: "accent" };
+  if (finalEvidence === "needs_check") return { label: "需确认", tone: "muted" };
+  return { label: "AI 建议", tone: "accent" };
 }
 
 export function CreateTrip({
@@ -130,6 +145,8 @@ export function CreateTrip({
     await wait(500);
     setAnalysisLabel("正在区分现成行程与规划想法…");
     await wait(650);
+    setAnalysisLabel("正在整理可执行攻略结构…");
+    await wait(450);
 
     const intent = extractTravelIntent(inputText);
     const mode: PlanningMode =
@@ -155,7 +172,7 @@ export function CreateTrip({
       setAiSummary(
         organized.length
           ? `我识别到这是一份现成行程，已按顺序整理出 ${organized.length} 项内容。原文之外的信息不会自动补写。`
-          : "我识别到你正在导入现成资料。当前原型已完成上传/链接读取状态，但不会只凭图片文件名或网页 URL 编造行程；识别出明确文字后会放入待确认项。",
+          : "我识别到你正在导入现成资料。当前原型已完成上传/链接读取状态，但不会只凭图片文件名或网页 URL 编造行程；识别出明确文字后才会进入攻略。",
       );
       setStep("preview");
       return;
@@ -172,9 +189,15 @@ export function CreateTrip({
     setAiSummary(
       `根据“${destinationPreference || selectedDestination || "目的地待定"}”、${
         dateLabel || "时间待定"
-      }和 ${days} 天，我先生成一版可编辑攻略：包含具体地点、建议时间、路线取舍和交通提醒。所有内容仍是 AI 建议，不会冒充你已确认的信息。`,
+      }和 ${days} 天，我先生成一版可编辑攻略：明确输入会标为已确认，路线和节奏标为 AI 建议，开放/预约/天气等动态信息才标需确认。`,
     );
     setStep("preview");
+  };
+
+  const updatePreviewItem = (id: string, patch: Partial<ItineraryItem>) => {
+    setItinerary((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+    );
   };
 
   const createDraft = () => {
@@ -205,6 +228,43 @@ export function CreateTrip({
     if (step === "preview") return setStep(planningMode === "plan" ? "questions" : "input");
   };
 
+  const infoCards: Array<{
+    Icon: typeof MapPin;
+    label: string;
+    value: string | null;
+    status: string;
+    tone: "muted" | "brand" | "accent";
+  }> = [
+    {
+      Icon: MapPin,
+      label: "目的地",
+      value: destination || destinationPreference || null,
+      status: destinationPreference && destination ? "AI 建议" : destination ? "已确认" : "需补充",
+      tone: destinationPreference && destination ? "accent" : destination ? "brand" : "muted",
+    },
+    {
+      Icon: CalendarDays,
+      label: "日期",
+      value: dateLabel || null,
+      status: dateStatus === "confirmed" ? "已确认" : dateLabel ? "需确认" : "可稍后补",
+      tone: dateStatus === "confirmed" ? "brand" : dateLabel ? "muted" : "muted",
+    },
+    {
+      Icon: Clock3,
+      label: "时长",
+      value: durationDays ? `${durationDays} 天` : null,
+      status: durationDays ? "已确认" : "可稍后补",
+      tone: durationDays ? "brand" : "muted",
+    },
+    {
+      Icon: Users,
+      label: "人数",
+      value: peopleCount ? `${peopleCount} 人` : null,
+      status: peopleCount ? "已确认" : "可稍后补",
+      tone: peopleCount ? "brand" : "muted",
+    },
+  ];
+
   return (
     <MiniShell title="创建新旅行" onBack={back} showTabBar={false}>
       <div className="space-y-4 px-5 pb-8 pt-2">
@@ -214,7 +274,8 @@ export function CreateTrip({
               <Tag tone="accent">统一多模态输入</Tag>
               <h2 className="mt-3 text-[20px] font-bold text-foreground">把你知道的都发给我</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                想法、完整行程、图片、订单、攻略和网页链接都可以混在一起；识别结果需要你确认后才会进入行程。
+                想法、完整行程、图片、订单、攻略和网页链接都可以混在一起；明确内容会作为已确认信息，AI
+                不会凭空补写成事实。
               </p>
             </div>
 
@@ -303,7 +364,7 @@ export function CreateTrip({
                         <p className="text-[10px] text-muted-foreground">
                           {source.error ??
                             (source.status === "recognized"
-                              ? "识别完成，等待确认"
+                              ? "已加入资料区，保存前可删除"
                               : source.status === "recognizing"
                                 ? "正在识别内容…"
                                 : "正在上传或读取…")}
@@ -351,7 +412,7 @@ export function CreateTrip({
             </div>
             <p className="mt-5 text-[15px] font-semibold text-foreground">{analysisLabel}</p>
             <p className="mt-2 max-w-[17rem] text-[11px] leading-relaxed text-muted-foreground">
-              现成行程会被结构化；模糊想法会进入规划和少量追问。
+              现成行程会被结构化；模糊想法会生成可编辑攻略，并区分已确认、AI 建议和需确认。
             </p>
           </div>
         )}
@@ -383,14 +444,17 @@ export function CreateTrip({
             )}
 
             <Card>
-              <p className="text-[13px] font-semibold text-foreground">再回答 3 个关键问题</p>
+              <p className="text-[13px] font-semibold text-foreground">可选补充 3 个关键问题</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                不填也可以继续，缺失信息不会挡住规划。
+              </p>
               <div className="mt-3 space-y-3">
                 <label className="block">
                   <span className="text-[11px] text-muted-foreground">从哪里出发？</span>
                   <input
                     value={departureCity}
                     onChange={(event) => setDepartureCity(event.target.value)}
-                    placeholder="待确认"
+                    placeholder="可稍后补"
                     className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
                   />
                 </label>
@@ -402,7 +466,7 @@ export function CreateTrip({
                       min={1}
                       value={peopleCount}
                       onChange={(event) => setPeopleCount(event.target.value)}
-                      placeholder="待确认"
+                      placeholder="可稍后补"
                       className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
                     />
                   </label>
@@ -427,7 +491,7 @@ export function CreateTrip({
               </span>
             </PrimaryButton>
             <p className="-mt-2 text-center text-[10px] text-muted-foreground">
-              未填写项会保留为待确认，不会阻止生成可编辑方案
+              未填写项会作为少量需补充信息，不会阻止生成可编辑攻略
             </p>
           </>
         )}
@@ -437,7 +501,7 @@ export function CreateTrip({
             <Card>
               <div className="flex items-center justify-between">
                 <Tag tone={planningMode === "plan" ? "accent" : "brand"}>
-                  {planningMode === "plan" ? "AI 规划方案" : "AI 结构化结果"}
+                  {planningMode === "plan" ? "AI 可执行攻略" : "AI 结构化结果"}
                 </Tag>
                 <Sparkles className="size-4 text-accent" />
               </div>
@@ -445,21 +509,22 @@ export function CreateTrip({
             </Card>
 
             <Card>
-              <p className="text-[13px] font-semibold text-foreground">已识别与待确认</p>
+              <p className="text-[13px] font-semibold text-foreground">信息状态</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                只有动态变化或缺失的信息才需要用户再确认。
+              </p>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                {[
-                  [MapPin, "目的地", destination || destinationPreference || null],
-                  [CalendarDays, "日期", dateLabel || null],
-                  [Clock3, "时长", durationDays ? `${durationDays} 天` : null],
-                  [Users, "人数", peopleCount ? `${peopleCount} 人` : null],
-                ].map(([Icon, label, value]) => {
-                  const FieldIcon = Icon as typeof MapPin;
+                {infoCards.map(({ Icon, label, value, status, tone }) => {
+                  const FieldIcon = Icon;
                   return (
-                    <div key={String(label)} className="rounded-[12px] bg-surface-sunk p-3">
-                      <FieldIcon className="size-3.5 text-muted-foreground" />
-                      <p className="mt-1 text-[10px] text-muted-foreground">{String(label)}</p>
-                      <p className="mt-0.5 text-[12px] font-medium text-foreground">
-                        {pendingLabel(value as string | null)}
+                    <div key={label} className="rounded-[12px] bg-surface-sunk p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <FieldIcon className="size-3.5 text-muted-foreground" />
+                        <Tag tone={tone}>{status}</Tag>
+                      </div>
+                      <p className="mt-2 text-[10px] text-muted-foreground">{label}</p>
+                      <p className="mt-0.5 text-[12px] font-semibold text-foreground">
+                        {valueOrFallback(value)}
                       </p>
                     </div>
                   );
@@ -469,51 +534,86 @@ export function CreateTrip({
 
             <Card>
               <div className="flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-foreground">可编辑行程</p>
+                <p className="text-[13px] font-semibold text-foreground">可编辑攻略</p>
                 <Tag>{itinerary.length} 项</Tag>
               </div>
               {itinerary.length ? (
                 <div className="mt-3 space-y-2">
-                  {itinerary.map((item, index) => (
-                    <div key={item.id} className="flex gap-2 rounded-[12px] bg-surface-sunk p-2.5">
-                      <span className="mt-1 shrink-0 text-[10px] font-semibold text-muted-foreground">
-                        D{item.day ?? index + 1}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <input
-                          value={item.title}
-                          onChange={(event) =>
-                            setItinerary((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, title: event.target.value }
-                                  : entry,
-                              ),
-                            )
-                          }
-                          className="w-full bg-transparent text-[12px] font-semibold text-foreground outline-none"
-                        />
-                        <textarea
-                          value={item.detail ?? ""}
-                          onChange={(event) =>
-                            setItinerary((current) =>
-                              current.map((entry) =>
-                                entry.id === item.id
-                                  ? { ...entry, detail: event.target.value || null }
-                                  : entry,
-                              ),
-                            )
-                          }
-                          rows={2}
-                          placeholder="补充路线、交通、取舍或预约提醒"
-                          className="mt-1 w-full resize-none bg-transparent text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
-                        />
+                  {itinerary.map((item, index) => {
+                    const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+                    return (
+                      <div key={item.id} className="rounded-[14px] bg-surface-sunk p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="shrink-0 text-[10px] font-semibold text-muted-foreground">
+                            D{item.day ?? index + 1}
+                          </span>
+                          <input
+                            type="time"
+                            value={item.time ?? ""}
+                            onChange={(event) =>
+                              updatePreviewItem(item.id, { time: event.target.value || null })
+                            }
+                            className="w-[68px] bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
+                          />
+                          <Tag tone={meta.tone}>{meta.label}</Tag>
+                          <input
+                            value={item.duration ?? ""}
+                            onChange={(event) =>
+                              updatePreviewItem(item.id, { duration: event.target.value || null })
+                            }
+                            placeholder="停留"
+                            className="min-w-0 flex-1 rounded-full bg-card/60 px-2 py-1 text-[10px] text-muted-foreground outline-none"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <input
+                            value={item.title}
+                            onChange={(event) =>
+                              updatePreviewItem(item.id, { title: event.target.value })
+                            }
+                            className="mt-2 w-full bg-transparent text-[13px] font-semibold text-foreground outline-none"
+                          />
+                          <textarea
+                            value={item.detail ?? ""}
+                            onChange={(event) =>
+                              updatePreviewItem(item.id, { detail: event.target.value || null })
+                            }
+                            rows={2}
+                            placeholder="补充路线、交通、取舍或预约提醒"
+                            className="mt-1 w-full resize-none bg-transparent text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
+                          />
+                          {item.reason && (
+                            <p className="mt-1 rounded-[10px] bg-card/50 px-2 py-1.5 text-[10px] leading-relaxed text-muted-foreground">
+                              为什么这样排：{item.reason}
+                            </p>
+                          )}
+                          {Boolean(item.checks?.length) && (
+                            <div className="mt-1 rounded-[10px] border border-border/70 bg-card/40 px-2 py-1.5">
+                              {item.checks!.map((check) => (
+                                <p
+                                  key={check}
+                                  className="text-[10px] leading-relaxed text-muted-foreground"
+                                >
+                                  需确认：{check}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                          {item.transportToNext && (
+                            <input
+                              value={item.transportToNext}
+                              onChange={(event) =>
+                                updatePreviewItem(item.id, {
+                                  transportToNext: event.target.value || null,
+                                })
+                              }
+                              className="mt-1 w-full bg-transparent text-[10px] text-muted-foreground outline-none"
+                            />
+                          )}
+                        </div>
                       </div>
-                      <Tag tone={item.source === "ai" ? "accent" : "muted"}>
-                        {item.source === "ai" ? "AI 建议" : "来自原文"}
-                      </Tag>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="mt-3 rounded-[12px] bg-surface-sunk p-3 text-center">

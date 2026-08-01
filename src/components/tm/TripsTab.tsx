@@ -32,6 +32,7 @@ import {
   TRAVEL_STATUS_LABELS,
   type CompanionProfile,
   type ExpenseCategory,
+  type ItineraryEvidence,
   type ItineraryItem,
   type SourceItem,
   type TravelItem,
@@ -44,6 +45,32 @@ import { CollaborationCenter } from "./CollaborationCenter";
 
 function valueOrPending(value: string | number | null) {
   return value === null || value === "" ? "待确定" : String(value);
+}
+
+function evidenceMeta(
+  evidence: ItineraryEvidence | undefined,
+  source: "user" | "ai",
+  confirmed?: boolean,
+): { label: string; tone: "muted" | "brand" | "accent"; description: string } {
+  const finalEvidence = confirmed
+    ? "confirmed"
+    : (evidence ?? (source === "user" ? "confirmed" : "suggested"));
+  if (finalEvidence === "confirmed") {
+    return { label: "已确认", tone: "brand", description: "来自用户输入或手动添加" };
+  }
+  if (finalEvidence === "queried") {
+    return { label: "已查询", tone: "accent", description: "来自资料或联网检索" };
+  }
+  if (finalEvidence === "needs_check") {
+    return { label: "需确认", tone: "muted", description: "会受开放、预约或天气影响" };
+  }
+  return { label: "AI 建议", tone: "accent", description: "由 AI 基于路线和节奏规划" };
+}
+
+function dayIntensityLabel(itemCount: number) {
+  if (itemCount <= 2) return "轻松";
+  if (itemCount === 3) return "舒适";
+  return "偏满";
 }
 
 function EmptySection({
@@ -407,6 +434,12 @@ function DayPlanEditor({
           time: lastTime ?? "16:00",
           title: "待编辑的新行程",
           detail: null,
+          duration: null,
+          transportToNext: null,
+          reason: null,
+          evidence: "needs_check",
+          checks: [],
+          alternatives: [],
           confirmed: false,
           source: "user",
         },
@@ -427,6 +460,12 @@ function DayPlanEditor({
           time: "09:00",
           title: "待编辑的新行程",
           detail: null,
+          duration: null,
+          transportToNext: null,
+          reason: null,
+          evidence: "needs_check",
+          checks: [],
+          alternatives: [],
           confirmed: false,
           source: "user",
         },
@@ -437,6 +476,15 @@ function DayPlanEditor({
 
   const firstStop = dayItems[0] ?? null;
   const routeItems = dayItems.slice(0, 4);
+  const suggestedCount = dayItems.filter(
+    (item) => evidenceMeta(item.evidence, item.source, item.confirmed).label === "AI 建议",
+  ).length;
+  const confirmedCount = dayItems.filter(
+    (item) => evidenceMeta(item.evidence, item.source, item.confirmed).label === "已确认",
+  ).length;
+  const checkItems = dayItems.flatMap((item) =>
+    (item.checks ?? []).map((check) => ({ id: `${item.id}-${check}`, title: item.title, check })),
+  );
   const routePositions = [
     { left: "10%", top: "26%" },
     { left: "40%", top: "58%" },
@@ -450,8 +498,8 @@ function DayPlanEditor({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Tag tone="accent">AI 可编辑行程</Tag>
-              <span className="text-[10px] text-muted-foreground">按天查看</span>
+              <Tag tone="accent">专业攻略</Tag>
+              <span className="text-[10px] text-muted-foreground">按天规划 · 可编辑</span>
             </div>
             <h3 className="mt-3 text-[19px] font-bold text-foreground">
               D{selectedDay} ·{" "}
@@ -501,79 +549,157 @@ function DayPlanEditor({
       <div className="px-4 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[13px] font-semibold text-foreground">当天时间线</p>
+            <p className="text-[13px] font-semibold text-foreground">当天攻略</p>
             <p className="mt-0.5 text-[10px] text-muted-foreground">
-              时间和地点都可以直接修改，AI 建议不会冒充已确认信息。
+              用户信息、AI 推理和动态风险分开标注，不再满屏待确认。
             </p>
           </div>
           <Tag>{dayItems.length} 站</Tag>
         </div>
 
+        <div className="mt-3 rounded-[16px] bg-brand-soft p-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-[12px] bg-card/65 p-2">
+              <p className="text-[9px] text-muted-foreground">路线策略</p>
+              <p className="mt-1 text-[11px] font-semibold text-foreground">低折返</p>
+              <p className="mt-0.5 text-[8px] text-muted-foreground">AI 建议</p>
+            </div>
+            <div className="rounded-[12px] bg-card/65 p-2">
+              <p className="text-[9px] text-muted-foreground">当天强度</p>
+              <p className="mt-1 text-[11px] font-semibold text-foreground">
+                {dayIntensityLabel(dayItems.length)}
+              </p>
+              <p className="mt-0.5 text-[8px] text-muted-foreground">{dayItems.length} 站</p>
+            </div>
+            <div className="rounded-[12px] bg-card/65 p-2">
+              <p className="text-[9px] text-muted-foreground">信息状态</p>
+              <p className="mt-1 text-[11px] font-semibold text-foreground">
+                {confirmedCount} 已确认
+              </p>
+              <p className="mt-0.5 text-[8px] text-muted-foreground">{suggestedCount} AI 建议</p>
+            </div>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+            当前为原型规划：路线按少折返原则排序；接入地图后会刷新真实车程、步行时间和拥挤风险。
+          </p>
+        </div>
+
         {dayItems.length ? (
           <div className="mt-4">
-            {dayItems.map((item, index) => (
-              <div key={item.id}>
-                <div className="grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2">
-                  <input
-                    type="time"
-                    value={item.time ?? ""}
-                    onChange={(event) => updateItem(item.id, { time: event.target.value || null })}
-                    aria-label={`${item.title}的时间`}
-                    className="mt-3 w-full bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
-                  />
-                  <div className="relative flex justify-center">
-                    <span className="relative z-10 mt-4 size-2.5 rounded-full border-2 border-card bg-accent shadow-sm" />
-                    {index < dayItems.length - 1 && (
-                      <span className="absolute bottom-[-18px] top-5 w-px bg-border" />
-                    )}
-                  </div>
-                  <div className="rounded-[16px] bg-surface-sunk p-3">
-                    <div className="flex items-start gap-2">
-                      <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
-                      <input
-                        value={item.title}
-                        onChange={(event) => updateItem(item.id, { title: event.target.value })}
-                        className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-foreground outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeItem(item.id)}
-                        aria-label={`删除 ${item.title}`}
-                      >
-                        <Trash2 className="size-3.5 text-muted-foreground" />
-                      </button>
-                    </div>
-                    <textarea
-                      value={item.detail ?? ""}
+            {dayItems.map((item, index) => {
+              const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+              return (
+                <div key={item.id}>
+                  <div className="grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2">
+                    <input
+                      type="time"
+                      value={item.time ?? ""}
                       onChange={(event) =>
-                        updateItem(item.id, { detail: event.target.value || null })
+                        updateItem(item.id, { time: event.target.value || null })
                       }
-                      rows={2}
-                      placeholder="补充路线、交通、预约或取舍提醒"
-                      className="mt-2 w-full resize-none rounded-[10px] bg-card/55 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
+                      aria-label={`${item.title}的时间`}
+                      className="mt-3 w-full bg-transparent text-[10px] font-medium text-muted-foreground outline-none"
                     />
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <Tag tone={item.source === "ai" ? "accent" : "muted"}>
-                        {item.source === "ai" ? "AI 建议" : "用户添加"}
-                      </Tag>
-                      <button
-                        type="button"
-                        onClick={() => openMapSearch(item.title, travel.destination)}
-                        className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground"
-                      >
-                        <Navigation className="size-3 text-accent" /> 导航
-                      </button>
+                    <div className="relative flex justify-center">
+                      <span className="relative z-10 mt-4 size-2.5 rounded-full border-2 border-card bg-accent shadow-sm" />
+                      {index < dayItems.length - 1 && (
+                        <span className="absolute bottom-[-18px] top-5 w-px bg-border" />
+                      )}
+                    </div>
+                    <div className="rounded-[16px] bg-surface-sunk p-3">
+                      <div className="flex items-start gap-2">
+                        <MapPin className="mt-0.5 size-4 shrink-0 text-accent" />
+                        <input
+                          value={item.title}
+                          onChange={(event) => updateItem(item.id, { title: event.target.value })}
+                          className="min-w-0 flex-1 bg-transparent text-[13px] font-semibold text-foreground outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          aria-label={`删除 ${item.title}`}
+                        >
+                          <Trash2 className="size-3.5 text-muted-foreground" />
+                        </button>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        <Tag tone={meta.tone}>{meta.label}</Tag>
+                        <label className="flex max-w-[98px] items-center rounded-full bg-card/70 px-2 py-1 text-[10px] text-muted-foreground">
+                          <input
+                            value={item.duration ?? ""}
+                            onChange={(event) =>
+                              updateItem(item.id, { duration: event.target.value || null })
+                            }
+                            placeholder="停留时长"
+                            className="min-w-0 bg-transparent outline-none placeholder:text-muted-foreground"
+                          />
+                        </label>
+                      </div>
+                      <textarea
+                        value={item.detail ?? ""}
+                        onChange={(event) =>
+                          updateItem(item.id, { detail: event.target.value || null })
+                        }
+                        rows={2}
+                        placeholder="补充路线、交通、预约或取舍提醒"
+                        className="mt-2 w-full resize-none rounded-[10px] bg-card/55 px-2.5 py-2 text-[10px] leading-relaxed text-muted-foreground outline-none placeholder:text-muted-foreground/70"
+                      />
+                      {item.reason && (
+                        <div className="mt-2 rounded-[10px] bg-card/55 px-2.5 py-2">
+                          <p className="text-[9px] font-semibold text-foreground">为什么这样排</p>
+                          <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
+                            {item.reason}
+                          </p>
+                        </div>
+                      )}
+                      {Boolean(item.alternatives?.length) && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {item.alternatives!.map((alternative) => (
+                            <span
+                              key={alternative}
+                              className="rounded-full bg-card/70 px-2 py-1 text-[9px] text-muted-foreground"
+                            >
+                              备选：{alternative}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {Boolean(item.checks?.length) && (
+                        <div className="mt-2 rounded-[10px] border border-border/70 bg-card/40 px-2.5 py-2">
+                          <p className="text-[9px] font-semibold text-foreground">需确认</p>
+                          <div className="mt-1 space-y-1">
+                            {item.checks!.map((check) => (
+                              <p
+                                key={check}
+                                className="text-[10px] leading-relaxed text-muted-foreground"
+                              >
+                                · {check}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span className="text-[9px] text-muted-foreground">{meta.description}</span>
+                        <button
+                          type="button"
+                          onClick={() => openMapSearch(item.title, travel.destination)}
+                          className="inline-flex items-center gap-1 text-[10px] font-medium text-foreground"
+                        >
+                          <Navigation className="size-3 text-accent" /> 导航
+                        </button>
+                      </div>
                     </div>
                   </div>
+                  {index < dayItems.length - 1 && (
+                    <div className="ml-[74px] flex min-h-8 items-center gap-1.5 py-1 text-[9px] text-muted-foreground">
+                      <CarFront className="size-3" />
+                      <span>{item.transportToNext ?? "前往下一站 · 接入地图后实时计算"}</span>
+                    </div>
+                  )}
                 </div>
-                {index < dayItems.length - 1 && (
-                  <div className="ml-[74px] flex h-8 items-center gap-1.5 text-[9px] text-muted-foreground">
-                    <CarFront className="size-3" />
-                    <span>前往下一站 · 路程由地图实时计算</span>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="mt-4 rounded-[14px] bg-surface-sunk p-4 text-center">
@@ -646,6 +772,18 @@ function DayPlanEditor({
           <p className="mt-2 text-center text-[9px] text-muted-foreground">
             将打开高德地图搜索第一站，后续地点可在时间线中继续导航。
           </p>
+          {checkItems.length > 0 && (
+            <div className="mt-3 rounded-[13px] bg-surface-sunk p-3">
+              <p className="text-[11px] font-semibold text-foreground">当天少量需确认项</p>
+              <div className="mt-2 space-y-1.5">
+                {checkItems.slice(0, 3).map((item) => (
+                  <p key={item.id} className="text-[10px] leading-relaxed text-muted-foreground">
+                    {item.title}：{item.check}
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -686,7 +824,7 @@ function TripHeroCard({
       aiPlanStatus: "generated",
       aiSummary: `已根据“${
         travel.destinationPreference || travel.destination || "当前旅行想法"
-      }”生成 ${days} 天可编辑攻略。每站包含具体地点、路线取舍和交通提醒，并继续标注为 AI 建议，等待你确认。`,
+      }”生成 ${days} 天可编辑攻略。明确输入、AI 建议和动态风险会分开标注，避免满屏待确认。`,
     });
   };
 
@@ -704,7 +842,7 @@ function TripHeroCard({
       patchTravel({
         sources: [...travel.sources, source],
         aiSummary:
-          "网页链接已加入资料识别。当前原型不会只凭 URL 编造行程；正式接入网页正文读取后，会把识别结果放入待确认项。",
+          "网页链接已加入资料识别。当前原型不会只凭 URL 编造行程；正式接入网页正文读取后，会把明确内容放入攻略，把动态风险标为需确认。",
       });
       setLink("");
       setLinkError("");
@@ -888,7 +1026,7 @@ function TripHeroCard({
                 patchTravel({
                   sources: [...travel.sources, ...added],
                   aiSummary:
-                    "图片已加入资料识别。当前原型不会从图片文件名编造行程；正式接入 OCR 后，会把识别结果放入待确认项。",
+                    "图片已加入资料识别。当前原型不会从图片文件名编造行程；正式接入 OCR 后，会把明确内容放入攻略，把动态风险标为需确认。",
                 });
                 event.target.value = "";
               }}
@@ -1360,10 +1498,13 @@ function buildGroupShareText(travel: TravelItem, includeDailyPlan: boolean) {
       if (!dayItems.length) continue;
       lines.push("", `D${day}`);
       dayItems.forEach((item) => {
-        lines.push(
-          `${item.time ?? "时间待定"} · ${item.title}${item.confirmed ? "" : "（待确认）"}`,
-        );
+        const meta = evidenceMeta(item.evidence, item.source, item.confirmed);
+        const duration = item.duration ? ` · ${item.duration}` : "";
+        lines.push(`${item.time ?? "时间未定"} · ${item.title}${duration} · ${meta.label}`);
         if (item.detail) lines.push(`  ${item.detail}`);
+        if (item.reason) lines.push(`  为什么这样排：${item.reason}`);
+        if (item.transportToNext) lines.push(`  下一站：${item.transportToNext}`);
+        (item.checks ?? []).forEach((check) => lines.push(`  需确认：${check}`));
       });
     }
   }
@@ -1456,7 +1597,7 @@ function ShareTripView({ travel, onBack }: { travel: TravelItem; onBack: () => v
             <span>
               <span className="block text-[11px] font-medium text-foreground">包含每天的安排</span>
               <span className="mt-1 block text-[9px] leading-relaxed text-muted-foreground">
-                未确认的时间和地点会明确标注“待确认”。
+                会标注已确认、AI 建议和少量需确认项。
               </span>
             </span>
           </label>

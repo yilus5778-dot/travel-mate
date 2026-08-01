@@ -10,6 +10,7 @@ export type SourceStatus = "selected" | "uploading" | "recognizing" | "recognize
 export type ExpenseCategory = "food" | "transport" | "hotel" | "ticket" | "shopping" | "other";
 export type ExpenseSplitMode = "equal" | "custom" | "personal";
 export type CollaborationRole = "owner" | "editor" | "viewer";
+export type ItineraryEvidence = "confirmed" | "queried" | "suggested" | "needs_check";
 
 export interface SourceItem {
   id: string;
@@ -25,6 +26,12 @@ export interface ItineraryItem {
   time: string | null;
   title: string;
   detail?: string | null;
+  duration?: string | null;
+  transportToNext?: string | null;
+  reason?: string | null;
+  evidence?: ItineraryEvidence;
+  checks?: string[];
+  alternatives?: string[];
   confirmed: boolean;
   source: "user" | "ai";
 }
@@ -285,6 +292,12 @@ interface ItineraryTemplateStop {
   time: string;
   title: string;
   detail: string;
+  duration?: string;
+  transportToNext?: string;
+  reason?: string;
+  evidence?: ItineraryEvidence;
+  checks?: string[];
+  alternatives?: string[];
 }
 
 const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
@@ -294,17 +307,28 @@ const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
         time: "10:30",
         title: "大同古城鼓楼住宿区",
         detail: "先放行李，住宿尽量选古城内或鼓楼周边；下午步行串联古城景点，少走回头路。",
+        duration: "60–90 分钟",
+        transportToNext: "步行 10–15 分钟",
+        reason: "到达日先把行李和住宿稳定下来，再进入古城步行线，降低折返和赶路感。",
+        alternatives: ["如果到得晚，直接跳到鼓楼东西街晚餐。"],
       },
       {
         time: "14:00",
         title: "华严寺",
         detail:
           "三个点都在古城范围内，适合半天步行；华严寺预留 1.5 小时，善化寺和九龙壁按体力取舍。",
+        duration: "90–120 分钟",
+        transportToNext: "步行 8–12 分钟",
+        reason: "华严寺是古城内最值得保留的主点，下午逛完后顺路接晚餐区。",
+        checks: ["寺庙开放时间和节假日闭馆情况需出发前查询。"],
+        alternatives: ["如果只想轻松逛，善化寺和九龙壁二选一。"],
       },
       {
         time: "18:30",
         title: "鼓楼东西街",
         detail: "晚餐可安排刀削面、烧麦、浑源凉粉；饭后看城墙和鼓楼夜景，第一天不再安排远途。",
+        duration: "90 分钟",
+        reason: "晚餐和夜景都在古城内解决，适合到达日收尾。",
       },
     ],
     [
@@ -312,16 +336,27 @@ const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
         time: "08:30",
         title: "云冈石窟",
         detail: "从市区出发，预留 3–4 小时；重点看第 5、6、20 窟。门票和开放时间出发前再确认。",
+        duration: "3–4 小时",
+        transportToNext: "打车 / 包车 35–50 分钟",
+        reason: "云冈石窟信息密度高，放在上午体力最好时；下午安排室内缓冲，节奏更稳。",
+        checks: ["门票预约、讲解场次和开放时间需联网确认。"],
       },
       {
         time: "13:30",
         title: "大同博物馆",
         detail: "云冈回来后安排室内点，降低疲劳；如果预约不上，就改成古城咖啡休息和补逛。",
+        duration: "90–120 分钟",
+        transportToNext: "打车 15–25 分钟",
+        reason: "上午远途后不继续塞户外点，转成室内内容，避免第二天体力透支。",
+        checks: ["博物馆预约规则和闭馆日需联网确认。"],
+        alternatives: ["预约不上时改为大同美术馆或古城休息。"],
       },
       {
         time: "18:00",
         title: "古城墙夜游",
         detail: "晚上节奏放轻，适合拍照和散步；第二天已经有远途，避免继续塞满景点。",
+        duration: "60–90 分钟",
+        reason: "夜间只保留轻量散步点，让第二天悬空寺 / 恒山更可执行。",
       },
     ],
     [
@@ -329,16 +364,27 @@ const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
         time: "08:00",
         title: "悬空寺",
         detail: "距离市区较远，建议包车或一日游；旺季尽量提前预约，现场排队时间要留余量。",
+        duration: "90–150 分钟",
+        transportToNext: "景区车 / 包车 15–25 分钟",
+        reason: "悬空寺排队和限流不确定性高，放在最早时段更稳。",
+        checks: ["悬空寺登临名额、天气和限流政策需出发前确认。"],
       },
       {
         time: "11:30",
         title: "恒山",
         detail: "体力够就继续恒山，不想爬山就改成浑源午餐和轻松返城；不要两边都硬赶。",
+        duration: "2.5–4 小时",
+        transportToNext: "包车返城约 1.5 小时",
+        reason: "悬空寺和恒山同方向，适合放在同一天；但恒山作为弹性项，不强迫完成。",
+        checks: ["索道、天气和末班交通需联网确认。"],
+        alternatives: ["体力不足时改成浑源午餐后返城。"],
       },
       {
         time: "16:30",
         title: "回大同取行李返程",
         detail: "从浑源回市区时间不短，返程车票或航班建议留出至少 2 小时机动。",
+        duration: "90–120 分钟",
+        reason: "最后一站只做返程缓冲，避免远途当天压线赶车。",
       },
     ],
   ],
@@ -611,6 +657,16 @@ const GENERIC_DAY_PLANS: ItineraryTemplateStop[][] = [
 ];
 
 const SUGGESTED_TIMES = ["09:00", "13:30", "18:00"];
+const SUGGESTED_DURATIONS = ["60–90 分钟", "2–3 小时", "60–90 分钟"];
+const SUGGESTED_REASONS = [
+  "把当天最重要或最需要确定交通的节点放前面，减少后续不确定性。",
+  "中段安排核心体验或顺路补充点，避免路线来回跳。",
+  "晚上留给低强度安排或返程缓冲，让计划更可执行。",
+];
+const SUGGESTED_TRANSPORTS = [
+  "前往下一站 · 优先步行或短途打车，接入地图后刷新真实时间",
+  "前往下一站 · 按低折返顺序排列，接入地图后校验路线",
+];
 
 export function buildSuggestedItinerary(
   destination: string | null,
@@ -647,6 +703,15 @@ export function buildSuggestedItinerary(
       time: stop.time || SUGGESTED_TIMES[itemIndex] || null,
       title: stop.title,
       detail: stop.detail,
+      duration: stop.duration ?? SUGGESTED_DURATIONS[itemIndex] ?? null,
+      transportToNext:
+        itemIndex < dayPlan.length - 1
+          ? (stop.transportToNext ?? SUGGESTED_TRANSPORTS[itemIndex] ?? null)
+          : null,
+      reason: stop.reason ?? SUGGESTED_REASONS[itemIndex] ?? null,
+      evidence: stop.evidence ?? "suggested",
+      checks: stop.checks ?? [],
+      alternatives: stop.alternatives ?? [],
       confirmed: false,
       source: "ai" as const,
     }));
@@ -666,6 +731,12 @@ export function organizePastedItinerary(textValue: string): ItineraryItem[] {
     time: line.match(/\b\d{1,2}:\d{2}\b/)?.[0] ?? null,
     title: line.replace(/^(?:D\d+|Day\s*\d+|第[一二三四五六七八九十\d]+天)[:：\s-]*/i, ""),
     detail: null,
+    duration: null,
+    transportToNext: null,
+    reason: "来自你粘贴或输入的原文，未额外补写。",
+    evidence: "confirmed",
+    checks: [],
+    alternatives: [],
     confirmed: false,
     source: "user",
   }));
@@ -764,6 +835,13 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
       ...item,
       day: item.day ?? index + 1,
       detail: item.detail ?? null,
+      duration: item.duration ?? null,
+      transportToNext: item.transportToNext ?? null,
+      reason: item.reason ?? null,
+      evidence:
+        item.evidence ?? (item.source === "user" || item.confirmed ? "confirmed" : "suggested"),
+      checks: item.checks ?? [],
+      alternatives: item.alternatives ?? [],
       source: item.source ?? "user",
     })),
     expenses: (travel.expenses ?? []).map((expense) => ({
