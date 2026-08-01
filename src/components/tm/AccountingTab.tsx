@@ -469,8 +469,8 @@ export function AccountingTab({
   return (
     <MiniShell title="记账" tab={tab} onTabChange={onTabChange}>
       <div className="space-y-5 px-5 pb-8 pt-3">
-        <Card className="relative overflow-hidden bg-brand-soft">
-          <div className="absolute -right-12 -top-14 size-40 rounded-full bg-card/45" />
+        <Card className="relative overflow-hidden bg-brand-soft !p-4">
+          <div className="absolute -right-10 -top-12 size-32 rounded-full bg-card/45" />
           <div className="relative">
             <div className="flex items-start justify-between gap-3">
               <Tag tone="accent">按旅行地归档</Tag>
@@ -478,32 +478,32 @@ export function AccountingTab({
                 type="button"
                 onClick={() => setView("create")}
                 aria-label="新建记账"
-                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
+                className="flex size-8 shrink-0 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
               >
-                <Plus className="size-5" />
+                <Plus className="size-4" />
               </button>
             </div>
-            <div className="mt-5 flex size-12 items-center justify-center rounded-[16px] bg-card/75">
-              <WalletCards className="size-5 text-accent" />
+            <div className="mt-3 flex size-9 items-center justify-center rounded-[13px] bg-card/75">
+              <WalletCards className="size-4 text-accent" />
             </div>
-            <h2 className="mt-4 text-[22px] font-bold text-foreground">旅行账本</h2>
-            <p className="mt-2 text-[11px] leading-relaxed text-foreground/70">
-              每个目的地一份账本，能看总金额、每人大约分摊、待结算转账，也能发到群里让同行人查看。
+            <h2 className="mt-2 text-[18px] font-bold text-foreground">旅行账本</h2>
+            <p className="mt-1 text-[10px] leading-relaxed text-foreground/70">
+              每个目的地一份账本，可看总额、人均分摊、待结算，也能发到群里查看。
             </p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-[12px] bg-card/75 p-3">
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-[11px] bg-card/75 p-2.5">
                 <p className="text-[8px] text-muted-foreground">真实账本</p>
-                <p className="mt-1 text-[13px] font-bold text-foreground">{travels.length} 份</p>
+                <p className="mt-0.5 text-[12px] font-bold text-foreground">{travels.length} 份</p>
               </div>
-              <div className="rounded-[12px] bg-card/75 p-3">
+              <div className="rounded-[11px] bg-card/75 p-2.5">
                 <p className="text-[8px] text-muted-foreground">总支出</p>
-                <p className="mt-1 text-[13px] font-bold text-foreground">
+                <p className="mt-0.5 text-[12px] font-bold text-foreground">
                   {formatMoney(realTotal)}
                 </p>
               </div>
-              <div className="rounded-[12px] bg-card/75 p-3">
+              <div className="rounded-[11px] bg-card/75 p-2.5">
                 <p className="text-[8px] text-muted-foreground">待 AA</p>
-                <p className="mt-1 text-[13px] font-bold text-foreground">{unsettledCount} 个</p>
+                <p className="mt-0.5 text-[12px] font-bold text-foreground">{unsettledCount} 个</p>
               </div>
             </div>
           </div>

@@ -1315,8 +1315,6 @@ function TripHeroCard({
   const isDraft = travel.status === "draft";
   const dateLabel = displayTravelDate(travel.dateText, travel.durationDays);
   const canShare = Boolean(travel.destination) && travel.itinerary.length > 0;
-  const packingItems = getPackingItems(travel);
-  const packing = packingProgress(packingItems);
 
   const patchTravel = (patch: Partial<TravelItem>) =>
     onUpdate({
@@ -1437,18 +1435,16 @@ function TripHeroCard({
               placeholder="天数"
               className="w-6 bg-transparent font-medium text-foreground outline-none placeholder:text-muted-foreground"
             />
-            <span className="font-medium text-foreground">
-              天 · {travel.itinerary.length ? `${travel.itinerary.length}项` : "待生成"}
-            </span>
+            <span className="font-medium text-foreground">天</span>
           </label>
         </div>
 
-        <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+        <div className="mt-2 grid grid-cols-2 gap-2">
           {travel.itinerary.length === 0 && (
             <button
               type="button"
               onClick={generatePlan}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
+              className="col-span-2 inline-flex items-center justify-center gap-1 rounded-[12px] bg-primary px-3 py-2 text-[10px] font-semibold text-primary-foreground"
             >
               <Sparkles className="size-3.5" /> 生成行程
             </button>
@@ -1456,110 +1452,118 @@ function TripHeroCard({
           <button
             type="button"
             onClick={onOpenChecklist}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] font-semibold text-foreground"
+            className="flex items-center justify-center gap-1.5 rounded-[12px] bg-surface-sunk px-3 py-2 text-[11px] font-bold text-foreground"
           >
-            <ClipboardList className="size-3.5 text-accent" />
-            清单 {packing.total ? `${packing.checked}/${packing.total}` : "待生成"}
+            <ClipboardList className="size-4 text-accent" />
+            旅行清单
           </button>
           <button
             type="button"
             onClick={onOpenAccounting}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-soft px-3 py-1.5 text-[10px] font-semibold text-foreground"
+            className="flex items-center justify-center gap-1.5 rounded-[12px] bg-brand-soft px-3 py-2 text-[11px] font-bold text-foreground"
           >
-            <CircleDollarSign className="size-3.5 text-accent" />
-            记账 {travel.expenses.length ? `${travel.expenses.length}笔` : "0笔"}
+            <CircleDollarSign className="size-4 text-accent" />
+            共同记账
           </button>
-          {canShare && (
-            <button
-              type="button"
-              onClick={onOpenGroupShare}
-              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-[10px] font-semibold text-primary-foreground"
-            >
-              <Share2 className="size-3.5" /> 分享到群
-            </button>
-          )}
         </div>
 
-        {isDraft && (
-          <div className="mt-2">
+        {(canShare || isDraft) && (
+          <div className="mt-1.5">
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => imageInputRef.current?.click()}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] font-medium text-foreground"
-              >
-                <ImageUp className="size-3.5" /> 图片
-              </button>
-              <div className="flex min-w-0 flex-1 gap-1">
-                <input
-                  value={link}
-                  onChange={(event) => setLink(event.target.value)}
-                  placeholder="粘贴网页链接"
-                  className="min-w-0 flex-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[10px] outline-none"
-                />
+              {canShare && (
                 <button
                   type="button"
-                  onClick={addLink}
-                  aria-label="添加网页链接"
-                  className="rounded-full bg-brand-soft px-2.5"
+                  onClick={onOpenGroupShare}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/90 px-2.5 py-1.5 text-[9px] font-semibold text-primary-foreground"
                 >
-                  <Link2 className="size-3.5" />
+                  <Share2 className="size-3" /> 分享
                 </button>
-              </div>
-            </div>
-            <input
-              ref={imageInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              className="hidden"
-              onChange={(event) => {
-                const added: SourceItem[] = Array.from(event.target.files ?? []).map(
-                  (file, index) => ({
-                    id: `draft-image-${Date.now()}-${index}`,
-                    kind: "image",
-                    name: file.name,
-                    status: "recognized",
-                  }),
-                );
-                patchTravel({
-                  sources: [...travel.sources, ...added],
-                  aiSummary:
-                    "图片已加入资料识别。当前原型不会从图片文件名编造行程；正式接入 OCR 后，会把明确内容放入攻略，把动态风险标为需确认。",
-                });
-                event.target.value = "";
-              }}
-            />
-            {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
-            {travel.sources.length > 0 && (
-              <div className="mt-1.5 flex gap-1 overflow-x-auto">
-                {travel.sources.map((source) => (
-                  <div
-                    key={source.id}
-                    className="flex max-w-[9rem] shrink-0 items-center gap-1 rounded-full bg-card/80 px-2 py-1"
+              )}
+              {isDraft && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-full bg-surface-sunk px-2.5 py-1.5 text-[9px] font-medium text-foreground"
                   >
-                    {source.kind === "image" ? (
-                      <ImageUp className="size-3 text-muted-foreground" />
-                    ) : (
-                      <Link2 className="size-3 text-muted-foreground" />
-                    )}
-                    <span className="min-w-0 flex-1 truncate text-[9px] text-foreground">
-                      {source.name}
-                    </span>
+                    <ImageUp className="size-3" /> 图片
+                  </button>
+                  <div className="flex min-w-0 flex-1 gap-1">
+                    <input
+                      value={link}
+                      onChange={(event) => setLink(event.target.value)}
+                      placeholder="粘贴网页链接"
+                      className="min-w-0 flex-1 rounded-full bg-surface-sunk px-3 py-1.5 text-[9px] outline-none"
+                    />
                     <button
                       type="button"
-                      aria-label={`删除资料 ${source.name}`}
-                      onClick={() =>
-                        patchTravel({
-                          sources: travel.sources.filter((entry) => entry.id !== source.id),
-                        })
-                      }
+                      onClick={addLink}
+                      aria-label="添加网页链接"
+                      className="rounded-full bg-brand-soft px-2.5"
                     >
-                      <Trash2 className="size-3 text-muted-foreground" />
+                      <Link2 className="size-3.5" />
                     </button>
                   </div>
-                ))}
-              </div>
+                </>
+              )}
+            </div>
+            {isDraft && (
+              <>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const added: SourceItem[] = Array.from(event.target.files ?? []).map(
+                      (file, index) => ({
+                        id: `draft-image-${Date.now()}-${index}`,
+                        kind: "image",
+                        name: file.name,
+                        status: "recognized",
+                      }),
+                    );
+                    patchTravel({
+                      sources: [...travel.sources, ...added],
+                      aiSummary:
+                        "图片已加入资料识别。当前原型不会从图片文件名编造行程；正式接入 OCR 后，会把明确内容放入攻略，把动态风险标为需确认。",
+                    });
+                    event.target.value = "";
+                  }}
+                />
+                {linkError && <p className="mt-1 text-[10px] text-destructive">{linkError}</p>}
+                {travel.sources.length > 0 && (
+                  <div className="mt-1.5 flex gap-1 overflow-x-auto">
+                    {travel.sources.map((source) => (
+                      <div
+                        key={source.id}
+                        className="flex max-w-[9rem] shrink-0 items-center gap-1 rounded-full bg-card/80 px-2 py-1"
+                      >
+                        {source.kind === "image" ? (
+                          <ImageUp className="size-3 text-muted-foreground" />
+                        ) : (
+                          <Link2 className="size-3 text-muted-foreground" />
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[9px] text-foreground">
+                          {source.name}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`删除资料 ${source.name}`}
+                          onClick={() =>
+                            patchTravel({
+                              sources: travel.sources.filter((entry) => entry.id !== source.id),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-3 text-muted-foreground" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
