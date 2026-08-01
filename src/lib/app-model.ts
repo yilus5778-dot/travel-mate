@@ -175,6 +175,10 @@ export const TRAVEL_STATUS_LABELS: Record<TravelStatus, string> = {
 };
 
 const DESTINATIONS = [
+  "呼伦贝尔",
+  "海拉尔",
+  "额尔古纳",
+  "满洲里",
   "大理",
   "北京",
   "上海",
@@ -300,6 +304,7 @@ export function getDestinationCandidates(preference: string | null) {
   if (preference === "海边" || preference === "海岛") return ["厦门", "青岛", "北海"];
   if (preference === "古镇") return ["苏州", "大理", "杭州"];
   if (preference === "山里") return ["大理", "成都", "昆明"];
+  if (preference === "草原") return ["呼伦贝尔", "锡林郭勒", "乌兰察布"];
   if (preference === "温泉") return ["福州", "昆明", "成都"];
   if (preference === "滑雪") return ["北京", "青岛", "西安"];
   return [];
@@ -619,6 +624,371 @@ const ITINERARY_TEMPLATES: Record<string, ItineraryTemplateStop[][]> = {
   ],
 };
 
+const HULUNBUIR_ALIAS_RE =
+  /呼伦贝尔|海拉尔|额尔古纳|满洲里|黑山头|莫尔格勒|莫日格勒|呼伦湖|根河|莫尔道嘎|室韦|敖鲁古雅|卡线|草原/;
+
+const HULUNBUIR_THREE_DAY_TEMPLATE: ItineraryTemplateStop[][] = [
+  [
+    {
+      time: "10:30",
+      title: "海拉尔抵达与交通确认",
+      detail:
+        "海拉尔通常作为呼伦贝尔草原线入口；先确认取车/包车/景区直通车、住宿和第一天是否能当日出城。",
+      duration: "45–60 分钟",
+      transportToNext: "前往莫尔格勒河方向 · 以当天交通为准",
+      reason: "短线时间少，先把交通方式确认清楚，再从海拉尔进入草原核心区，避免后面每天折返。",
+      checks: ["航班或火车到达时间、取车/包车集合点、景区直通车班次需出发前确认。"],
+      alternatives: ["如果中午后才到，第一天改为海拉尔市区休整，莫尔格勒河顺延到第二天。"],
+    },
+    {
+      time: "13:30",
+      title: "呼伦贝尔大草原·莫尔格勒河景区",
+      detail:
+        "把草原和河曲作为第一天核心体验；重点看草原开阔视野和莫尔格勒河弯曲河谷，不建议再塞远点。",
+      duration: "2–3 小时",
+      transportToNext: "继续前往额尔古纳住宿 · 预留草原路段慢行时间",
+      reason: "莫尔格勒河是海拉尔出发最顺的草原主点，放在第一天下午能马上进入呼伦贝尔体验。",
+      checks: ["景区开放、门票/区间车、草原防火或道路管制需出发前确认。"],
+    },
+    {
+      time: "18:30",
+      title: "额尔古纳住宿与晚餐",
+      detail: "晚上住额尔古纳，把第二天湿地和黑山头路线接起来；晚餐选市区蒙餐或俄式简餐。",
+      duration: "60–90 分钟",
+      reason: "住额尔古纳比当天返回海拉尔更顺路，第二天可以自然接湿地和边境草原线。",
+      alternatives: ["如果不换酒店，则第一天只做海拉尔—莫尔格勒河往返，第二天再去额尔古纳。"],
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "额尔古纳湿地",
+      detail: "上午安排湿地观景，预留栈道和观景台时间；天气好时适合拍草原、河湾和林地交界。",
+      duration: "2–3 小时",
+      transportToNext: "前往黑山头 · 草原路段按慢速预留",
+      reason: "湿地放在上午视野和体力都更好，之后顺路进入黑山头方向，不走回头路。",
+      checks: ["景区开放、区间车和观景台开放情况需出发前确认。"],
+    },
+    {
+      time: "14:30",
+      title: "黑山头草原与日落",
+      detail: "下午抵达黑山头，骑马、草原活动和日落三选一，不要全部硬塞；重点留给傍晚光线。",
+      duration: "2–3 小时",
+      transportToNext: "晚上前往满洲里或住黑山头 · 根据体力决定",
+      reason: "黑山头更适合下午到傍晚，和额尔古纳湿地在同一条推进路线上。",
+      checks: ["骑马项目、草原活动资质和天气风力需现场确认。"],
+      alternatives: ["亲子或不想赶路时，当晚住黑山头，满洲里顺延到第三天上午。"],
+    },
+    {
+      time: "19:30",
+      title: "满洲里夜景或套娃广场外观",
+      detail: "如果体力允许，晚上只看城市夜景或套娃广场外观；不再安排需要长时间排队的项目。",
+      duration: "60–90 分钟",
+      reason: "三天线必须压缩强度，晚上只做低强度收尾，把正式参观留到第三天上午。",
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "满洲里国门景区或套娃景区",
+      detail: "二选一作为满洲里核心点；国门偏边境地标，套娃偏拍照和亲子，别两个都排满。",
+      duration: "2–3 小时",
+      transportToNext: "前往呼伦湖方向 · 返程日前别压线",
+      reason: "满洲里正式参观放在上午，避免前一晚赶路后还要硬逛，也方便下午回海拉尔。",
+      checks: ["景区开放时间、门票和节假日排队情况需出发前确认。"],
+    },
+    {
+      time: "12:30",
+      title: "呼伦湖午餐与湖边停留",
+      detail: "用呼伦湖做返程路上的自然点；午餐可选湖鱼类，不建议绕去太远的湖岸点。",
+      duration: "90–120 分钟",
+      transportToNext: "返回海拉尔 · 预留机场/火车站交通时间",
+      reason: "呼伦湖在满洲里返回海拉尔方向上更顺，适合作为最后一天自然收尾。",
+      checks: ["湖区开放、天气风力和具体可达入口需出发前确认。"],
+    },
+    {
+      time: "16:30",
+      title: "返回海拉尔取行李返程",
+      detail: "最后半天以返程安全为主；若晚班机/车，可以补呼伦贝尔博物馆或市区简餐。",
+      duration: "90–150 分钟",
+      reason: "短线最后一天不再新增远距离景点，保证能闭环回到海拉尔。",
+    },
+  ],
+];
+
+const HULUNBUIR_FOUR_DAY_TEMPLATE: ItineraryTemplateStop[][] = [
+  HULUNBUIR_THREE_DAY_TEMPLATE[0],
+  [
+    {
+      time: "09:00",
+      title: "额尔古纳湿地",
+      detail: "上午主看湿地和河谷观景，安排 2–3 小时即可；不要把白桦林、室韦和黑山头全塞同一天。",
+      duration: "2–3 小时",
+      transportToNext: "前往黑山头 · 路上预留拍照停靠",
+      reason: "四天线要保持可执行，第二天从额尔古纳推进到黑山头，路线顺且强度可控。",
+      checks: ["景区开放、区间车和天气需出发前确认。"],
+    },
+    {
+      time: "14:30",
+      title: "黑山头草原活动",
+      detail: "下午做骑马、草原体验或观景台，不建议报过多项目；傍晚把时间留给日落。",
+      duration: "2–3 小时",
+      transportToNext: "住黑山头或前往满洲里 · 根据体力决定",
+      reason: "黑山头适合傍晚光线和草原活动，放在额尔古纳之后不会绕路。",
+      checks: ["骑马安全、项目资质和草原天气需现场确认。"],
+    },
+    {
+      time: "19:00",
+      title: "黑山头日落与住宿",
+      detail: "如果不赶去满洲里，住黑山头更松弛；第二天再走 186 彩带河到满洲里。",
+      duration: "60–90 分钟",
+      reason: "四天线比三天线多一天，可以把黑山头日落作为独立体验，不必夜间赶长路。",
+    },
+  ],
+  [
+    {
+      time: "09:30",
+      title: "186 彩带河或边境公路风景段",
+      detail: "从黑山头往满洲里方向推进，选择一个草原观景点即可；以低折返和天气安全为主。",
+      duration: "90–120 分钟",
+      transportToNext: "前往满洲里 · 午后进入城市景点",
+      reason: "这一天主线是黑山头到满洲里，路上只保留一个风景点，避免变成走马观花。",
+      checks: ["景区开放、道路情况和大风天气需出发前确认。"],
+    },
+    {
+      time: "14:30",
+      title: "满洲里国门景区",
+      detail: "下午参观边境地标；如果带小朋友或更想拍照，可把主点改成套娃景区。",
+      duration: "2–3 小时",
+      transportToNext: "前往满洲里市区住宿",
+      reason: "满洲里作为边境城市核心体验，放在第三天下午，前后交通最顺。",
+      checks: ["开放时间、票务和节假日排队情况需出发前确认。"],
+      alternatives: ["国门和套娃二选一，另一个作为天气或体力允许时的加选。"],
+    },
+    {
+      time: "19:00",
+      title: "满洲里夜景与俄式晚餐",
+      detail: "晚上不再加远点，市区吃饭和看夜景即可；第二天还要经呼伦湖返回海拉尔。",
+      duration: "60–90 分钟",
+      reason: "把夜间安排控制在满洲里市区，既有城市特色，也不影响第二天返程。",
+    },
+  ],
+  HULUNBUIR_THREE_DAY_TEMPLATE[2],
+];
+
+const HULUNBUIR_DEEP_TEMPLATE: ItineraryTemplateStop[][] = [
+  [
+    {
+      time: "09:30",
+      title: "海拉尔抵达与取车/包车确认",
+      detail:
+        "先确认车辆、司机、住宿顺序和第一天是否能出城；呼伦贝尔点位分散，交通确认比多塞景点更重要。",
+      duration: "45–60 分钟",
+      transportToNext: "前往莫尔格勒河方向 · 按实际车况预留",
+      reason:
+        "海拉尔是呼伦贝尔环线常见入口，先锁定交通后，后续才能稳定串联草原、湿地、边境和湖区。",
+      checks: ["到达时间、车辆保险/资质、草原路段天气和集合点需出发前确认。"],
+    },
+    {
+      time: "13:00",
+      title: "呼伦贝尔大草原·莫尔格勒河景区",
+      detail:
+        "第一天核心只放草原和河曲；可以看观景点、草原风光和短暂停留，不建议继续赶到太深的北线。",
+      duration: "2–3 小时",
+      transportToNext: "前往额尔古纳或根河方向 · 傍晚前抵达住宿地",
+      reason: "莫尔格勒河从海拉尔进入最顺，是草原初体验的代表点，适合放在环线第一站。",
+      checks: ["景区开放、门票/区间车、草原防火或道路管制需出发前确认。"],
+    },
+    {
+      time: "17:30",
+      title: "额尔古纳湿地日落或市区住宿",
+      detail: "如果抵达早，去湿地看日落；如果路上慢，就只办理入住和吃饭，把湿地挪到第二天上午。",
+      duration: "60–120 分钟",
+      reason: "用额尔古纳做第一晚落点，第二天继续北上根河/敖鲁古雅，不需要折返海拉尔。",
+      alternatives: ["到得晚时直接住额尔古纳，湿地顺延。"],
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "额尔古纳湿地",
+      detail: "上午完成湿地核心观景，重点看河湾、草原与林地交界；不要和太多远点并列。",
+      duration: "2–3 小时",
+      transportToNext: "前往根河 · 路上选择一处轻量停靠",
+      reason: "湿地是额尔古纳代表体验，上午安排更稳；之后顺路进入大兴安岭森林方向。",
+      checks: ["景区开放、区间车和天气需出发前确认。"],
+    },
+    {
+      time: "14:30",
+      title: "敖鲁古雅使鹿部落",
+      detail: "把驯鹿文化体验作为下午核心；控制停留时长，尊重当地规则，不做过度商业化体验。",
+      duration: "90–120 分钟",
+      transportToNext: "前往根河或莫尔道嘎住宿 · 天黑前完成长路段",
+      reason: "根河方向适合连接敖鲁古雅和森林线，是五天以上玩法才值得加入的点。",
+      checks: ["开放时间、动物互动规则和道路状况需出发前确认。"],
+    },
+    {
+      time: "18:30",
+      title: "根河住宿与补给",
+      detail: "夜间以休整和补给为主；第二天再进入莫尔道嘎/室韦方向，避免连续长途赶路。",
+      duration: "60–90 分钟",
+      reason: "北线距离长，根河作为落点能让第三天森林和边境村镇更可执行。",
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "莫尔道嘎森林公园方向",
+      detail: "上午走森林风景线；如果时间紧或天气差，就保留路上观景，不硬进完整景区。",
+      duration: "2–3 小时",
+      transportToNext: "前往室韦方向 · 森林路段预留慢行",
+      reason: "五天以上才适合把森林线放进来，它和草原、湿地形成不同层次，不再只是草原重复。",
+      checks: ["景区开放、道路和森林防火要求需出发前确认。"],
+      alternatives: ["如果不想长距离北上，可把这天改为额尔古纳—白桦林—黑山头。"],
+    },
+    {
+      time: "13:30",
+      title: "室韦或临江边境村镇",
+      detail: "下午看边境村镇、河岸和木刻楞建筑；只选一个村镇停留，不在多个小镇之间来回跳。",
+      duration: "2–3 小时",
+      transportToNext: "沿卡线前往黑山头 · 日落前后抵达",
+      reason: "室韦/临江更适合放在北线中段，顺着边境线南下到黑山头，结构清晰。",
+      checks: ["边境区域规则、道路通行和住宿情况需出发前确认。"],
+    },
+    {
+      time: "18:30",
+      title: "黑山头日落",
+      detail: "傍晚抵达黑山头看草原日落；骑马等活动根据体力和天气决定，不作为必做。",
+      duration: "60–90 分钟",
+      reason: "从室韦/卡线南下到黑山头，日落是最顺的收尾，不需要再赶到满洲里。",
+    },
+  ],
+  [
+    {
+      time: "09:30",
+      title: "黑山头草原活动",
+      detail: "上午补骑马、草原小项目或观景；只选一个体验，给下午去满洲里留足路程。",
+      duration: "90–120 分钟",
+      transportToNext: "前往满洲里 · 路上可选 186 彩带河",
+      reason: "把草原活动放在黑山头当地完成，避免满洲里城市线和草原线混在一起。",
+      checks: ["骑马安全、项目资质、天气风力需现场确认。"],
+    },
+    {
+      time: "13:30",
+      title: "186 彩带河或边境公路观景",
+      detail: "作为去满洲里的路上补充点；如果天气差或时间紧，直接跳过，不影响主路线。",
+      duration: "60–90 分钟",
+      transportToNext: "进入满洲里市区",
+      reason: "路上只加一个观景点，保证下午能稳定进入满洲里。",
+      checks: ["景区开放、道路情况和大风天气需出发前确认。"],
+    },
+    {
+      time: "16:30",
+      title: "满洲里国门景区",
+      detail: "下午看边境地标；若排队或闭园，就改为套娃广场外观和市区夜景。",
+      duration: "90–150 分钟",
+      reason: "满洲里是环线城市收束点，国门/套娃二选一即可，避免当天过载。",
+      checks: ["开放时间、票务和节假日排队情况需出发前确认。"],
+      alternatives: ["亲子或拍照优先时改为套娃景区。"],
+    },
+  ],
+  [
+    {
+      time: "09:00",
+      title: "满洲里套娃景区或市区补拍",
+      detail: "前一天选国门，这天可补套娃；前一天已玩套娃，则上午轻松逛市区和买伴手礼。",
+      duration: "90–120 分钟",
+      transportToNext: "前往呼伦湖方向 · 开始返海拉尔",
+      reason: "把满洲里第二个点放在返程日上午，既不漏特色，也不占用草原线时间。",
+      checks: ["开放时间、票务和天气需出发前确认。"],
+    },
+    {
+      time: "12:30",
+      title: "呼伦湖午餐与湖边停留",
+      detail: "返程路上的湖区自然点；午餐可选湖鱼类，湖边停留按风力和天气调整。",
+      duration: "90–120 分钟",
+      transportToNext: "返回海拉尔 · 预留机场/火车站时间",
+      reason: "呼伦湖适合放在满洲里返回海拉尔的路上，完成草原—边境—湖区闭环。",
+      checks: ["湖区可达入口、天气风力和路况需出发前确认。"],
+    },
+    {
+      time: "16:30",
+      title: "返回海拉尔",
+      detail: "抵达海拉尔后取行李、还车或办理返程；晚班机/车可补市区简餐。",
+      duration: "90–150 分钟",
+      reason: "最后一段只做返程闭环，保证整个行程能从海拉尔进出。",
+    },
+  ],
+  [
+    {
+      time: "09:30",
+      title: "呼伦贝尔博物馆",
+      detail: "如果有第六天，用海拉尔市区做文化补充和天气缓冲；上午安排室内点，不再远距离移动。",
+      duration: "90–120 分钟",
+      transportToNext: "市区短途移动",
+      reason: "多出来的一天不必继续向外扩，放在海拉尔市区更稳，也能吸收前几天长路段的不确定性。",
+      checks: ["预约规则、开放时间和闭馆日需出发前确认。"],
+    },
+    {
+      time: "13:30",
+      title: "世界反法西斯战争海拉尔纪念园",
+      detail: "下午选一个市区历史点；如果不想参观纪念园，就改为咖啡休整和特产采购。",
+      duration: "90–120 分钟",
+      transportToNext: "返回住宿或餐区",
+      reason: "海拉尔市区适合做轻量文化补充，不改变前面草原环线的主结构。",
+      checks: ["开放时间和参观规则需出发前确认。"],
+      alternatives: ["想轻松一点可改为成吉思汗广场和市区散步。"],
+    },
+    {
+      time: "18:30",
+      title: "海拉尔蒙餐与休整",
+      detail: "最后一晚以吃饭、整理照片和补买伴手礼为主，为返程留体力。",
+      duration: "60–90 分钟",
+      reason: "第六天收束到市区，方便第二天返程，也给天气变化留出缓冲。",
+    },
+  ],
+  [
+    {
+      time: "09:30",
+      title: "海拉尔返程缓冲",
+      detail: "最后一天不再安排远线；根据返程时间选择早餐、取行李、还车和机场/火车站交通。",
+      duration: "60–120 分钟",
+      transportToNext: "前往机场/火车站",
+      reason: "呼伦贝尔路程长、天气变化快，最后一天留白比继续塞景点更可靠。",
+    },
+    {
+      time: "12:30",
+      title: "市区午餐与伴手礼",
+      detail: "返程前就近解决午餐和伴手礼，不跨区寻找网红店。",
+      duration: "60–90 分钟",
+      reason: "把吃饭和采购合并，减少返程前折返。",
+    },
+    {
+      time: "15:30",
+      title: "海拉尔机场/火车站返程",
+      detail: "按实际航班或车次预留交通和安检时间；若早班返程，直接删除上午安排。",
+      duration: "60–90 分钟",
+      reason: "保证全程闭环回到海拉尔，不把返程日做成高风险日。",
+    },
+  ],
+];
+
+function isHulunbuirDestination(destination: string | null) {
+  return destination ? HULUNBUIR_ALIAS_RE.test(destination) : false;
+}
+
+function getItineraryTemplate(
+  destination: string | null,
+  durationDays: number,
+): ItineraryTemplateStop[][] | undefined {
+  if (isHulunbuirDestination(destination)) {
+    if (durationDays <= 3) return HULUNBUIR_THREE_DAY_TEMPLATE;
+    if (durationDays === 4) return HULUNBUIR_FOUR_DAY_TEMPLATE;
+    return HULUNBUIR_DEEP_TEMPLATE;
+  }
+  return destination ? ITINERARY_TEMPLATES[destination] : undefined;
+}
+
 const GENERIC_DAY_PLANS: ItineraryTemplateStop[][] = [
   [
     {
@@ -847,7 +1217,7 @@ export function buildSuggestedItinerary(
   companionKey?: AnimalKey | null,
 ): ItineraryItem[] {
   const days = Math.min(Math.max(durationDays ?? 3, 1), 7);
-  const template = destination ? ITINERARY_TEMPLATES[destination] : undefined;
+  const template = getItineraryTemplate(destination, days);
 
   const itinerary = Array.from({ length: days }, (_, dayIndex) => {
     const fallback =
@@ -953,8 +1323,12 @@ export function buildPackingChecklist(travel: Pick<TravelItem, "destination" | "
   const destination = travel.destination ?? "";
   const destinationText = destination || "目的地";
   const season = inferPackingSeason(travel.dateText);
-  const isCoastal = /海|岛|厦门|青岛|北海|三亚|秦皇岛|鼓浪屿|银滩|涠洲/.test(destinationText);
+  const isCoastal =
+    /海边|海岛|海岸|海景|沙滩|码头|厦门|青岛|北海|三亚|秦皇岛|鼓浪屿|银滩|涠洲/.test(
+      destinationText,
+    );
   const isMountain = /山|大理|昆明|恒山|崂山|悬空|高原/.test(destinationText);
+  const isGrassland = HULUNBUIR_ALIAS_RE.test(destinationText);
   const isCityWalk = /北京|上海|成都|重庆|杭州|苏州|西安|南京|长沙|大同|古城|街/.test(
     destinationText,
   );
@@ -1135,7 +1509,48 @@ export function buildPackingChecklist(travel: Pick<TravelItem, "destination" | "
       ),
     );
   }
-  if (isCityWalk || (!isCoastal && !isMountain)) {
+  if (isGrassland) {
+    items.push(
+      packingItem(
+        "dest-grassland-windproof",
+        season === "春季" || season === "秋季" ? "抓绒或轻薄保暖层" : "防风外套",
+        "clothing",
+        `${destinationText}草原和湖区风大，早晚体感温度会明显降低。`,
+        "destination",
+      ),
+      packingItem(
+        "dest-grassland-sunscreen",
+        "防晒霜 / 墨镜",
+        "health",
+        "草原遮挡少，白天紫外线和眩光都更明显。",
+        "destination",
+      ),
+      packingItem(
+        "dest-grassland-mosquito",
+        "驱蚊用品",
+        "health",
+        "夏秋季草原、湿地和湖边停留时更需要。",
+        "destination",
+        season === "夏季" || season === "秋季",
+      ),
+      packingItem(
+        "dest-grassland-moisturizer",
+        "润唇膏 / 保湿用品",
+        "health",
+        "草原和边境线风干，长时间户外更容易干燥。",
+        "destination",
+        false,
+      ),
+      packingItem(
+        "dest-grassland-offline-map",
+        "离线地图和充足流量",
+        "electronics",
+        "呼伦贝尔点位分散，草原路段信号可能不稳定。",
+        "destination",
+      ),
+    );
+  }
+  if (isCityWalk || (!isCoastal && !isMountain && !isGrassland)) {
     items.push(
       packingItem(
         "dest-walking-shoes",

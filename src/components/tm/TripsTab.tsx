@@ -150,6 +150,13 @@ function stopVisualMeta(title: string, destination: string | null) {
   if (/洱海|银滩|海|岛|鼓浪屿|码头|沙滩|小麦岛|栈桥|五四/.test(text)) {
     return { emoji: "🌊", label: "海边风景", tone: "from-[#d8edf0] via-[#f8f4e7] to-[#a7cbd1]" };
   }
+  if (
+    /呼伦贝尔|海拉尔|莫尔格勒|莫日格勒|额尔古纳|湿地|黑山头|满洲里|呼伦湖|根河|莫尔道嘎|室韦|敖鲁古雅|驯鹿|彩带河|草原|边境/.test(
+      text,
+    )
+  ) {
+    return { emoji: "🌾", label: "草原与边境", tone: "from-[#e4ead1] via-[#fff0cf] to-[#b8cf91]" };
+  }
   if (/恒山|悬空|崂山|山|公园|生态|廊道/.test(text)) {
     return { emoji: "⛰️", label: "自然路线", tone: "from-[#dfead2] via-[#f7f1df] to-[#abc58f]" };
   }
@@ -200,7 +207,50 @@ interface DailyFoodRecommendation {
   reason: string;
 }
 
+const HULUNBUIR_FOOD_RECOMMENDATIONS: DailyFoodRecommendation[] = [
+  {
+    area: "海拉尔 / 额尔古纳路上",
+    dishes: ["手把肉", "蒙古奶茶", "奶皮子"],
+    timing: "晚餐",
+    reason: "第一天路线从海拉尔进入草原，晚餐放在落脚城市更稳，不为吃饭额外折返。",
+  },
+  {
+    area: "额尔古纳 / 根河",
+    dishes: ["列巴", "蓝莓制品", "铁锅炖"],
+    timing: "午餐或晚餐",
+    reason: "湿地和森林线之间车程长，选沿线城市补给，比跨区找店更可靠。",
+  },
+  {
+    area: "黑山头",
+    dishes: ["烤羊排", "酸奶", "奶茶"],
+    timing: "晚餐",
+    reason: "黑山头适合把日落和晚餐合并，减少夜间继续赶路。",
+  },
+  {
+    area: "满洲里市区",
+    dishes: ["俄餐", "烤肉", "奶酪包"],
+    timing: "晚餐",
+    reason: "满洲里城市特色明显，晚餐放在市区最顺，也方便看夜景。",
+  },
+  {
+    area: "呼伦湖 / 返海拉尔路上",
+    dishes: ["湖鱼", "蒙餐简餐", "奶茶"],
+    timing: "午餐",
+    reason: "呼伦湖在满洲里返海拉尔方向上，午餐顺路解决，不影响返程。",
+  },
+  {
+    area: "海拉尔市区",
+    dishes: ["羊肉火锅", "布里亚特包子", "奶制品"],
+    timing: "晚餐",
+    reason: "多出来的缓冲日适合回到海拉尔市区，吃饭、补给和返程都方便。",
+  },
+];
+
 const DAILY_FOOD_RECOMMENDATIONS: Record<string, DailyFoodRecommendation[]> = {
+  呼伦贝尔: HULUNBUIR_FOOD_RECOMMENDATIONS,
+  海拉尔: HULUNBUIR_FOOD_RECOMMENDATIONS,
+  额尔古纳: HULUNBUIR_FOOD_RECOMMENDATIONS,
+  满洲里: HULUNBUIR_FOOD_RECOMMENDATIONS,
   大同: [
     {
       area: "鼓楼东西街 / 古城内",
