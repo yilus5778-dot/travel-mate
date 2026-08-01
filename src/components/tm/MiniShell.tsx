@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
-import { ChevronLeft, Map, PawPrint, User } from "lucide-react";
+import { ChevronLeft, Map, PawPrint, Receipt, User } from "lucide-react";
 
-export type TabKey = "trips" | "companion" | "mine";
+export type TabKey = "trips" | "accounting" | "companion" | "mine";
 
 export function MiniShell({
   title,
@@ -53,6 +53,7 @@ export function MiniShell({
             {(
               [
                 { key: "trips", label: "旅程", Icon: Map },
+                { key: "accounting", label: "记账", Icon: Receipt },
                 { key: "companion", label: "搭子", Icon: PawPrint },
                 { key: "mine", label: "我的", Icon: User },
               ] as const

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Onboarding, type OnboardingResult } from "@/components/tm/Onboarding";
 import { TripsTab } from "@/components/tm/TripsTab";
+import { AccountingTab } from "@/components/tm/AccountingTab";
 import { CompanionTab } from "@/components/tm/CompanionTab";
 import { MineTab } from "@/components/tm/MineTab";
 import { LoginDialog } from "@/components/tm/LoginDialog";
@@ -350,6 +351,16 @@ function Index() {
           memories: current.memories.filter((memory) => memory.id !== id),
         }))
       }
+    />
+  ) : state.tab === "accounting" ? (
+    <AccountingTab
+      travels={state.travels}
+      activeTravelId={state.activeTravelId}
+      tab={state.tab}
+      onTabChange={(tab) => setState((current) => ({ ...current, tab }))}
+      onSelectTravel={(id) => setState((current) => ({ ...current, activeTravelId: id }))}
+      onUpdateTravel={updateTravel}
+      onRequireLogin={requestLogin}
     />
   ) : (
     <MineTab
