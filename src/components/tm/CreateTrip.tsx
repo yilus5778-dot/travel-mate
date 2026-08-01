@@ -154,7 +154,7 @@ export function CreateTrip({
       setAiSummary(
         organized.length
           ? `我识别到这是一份现成行程，已按顺序整理出 ${organized.length} 项内容。原文之外的信息不会自动补写。`
-          : "我识别到你正在导入现成资料。图片和链接已完成识别，未确认的内容不会直接写入行程。",
+          : "我识别到你正在导入现成资料。当前原型已完成上传/链接读取状态，但不会只凭图片文件名或网页 URL 编造行程；识别出明确文字后会放入待确认项。",
       );
       setStep("preview");
       return;
@@ -213,7 +213,7 @@ export function CreateTrip({
               <Tag tone="accent">统一多模态输入</Tag>
               <h2 className="mt-3 text-[20px] font-bold text-foreground">把你知道的都发给我</h2>
               <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">
-                想法、完整行程、图片、订单、攻略和网页链接都可以混在一起。
+                想法、完整行程、图片、订单、攻略和网页链接都可以混在一起；识别结果需要你确认后才会进入行程。
               </p>
             </div>
 
@@ -240,7 +240,7 @@ export function CreateTrip({
                   <ImageUp className="size-4" /> 上传多张图片
                 </button>
                 <div className="flex items-center justify-center gap-1.5 rounded-[12px] bg-surface-sunk py-2.5 text-[11px] text-muted-foreground">
-                  <FileSearch className="size-4" /> 可识别订单与攻略
+                  <FileSearch className="size-4" /> 结果逐项确认
                 </div>
               </div>
               <input
@@ -302,7 +302,7 @@ export function CreateTrip({
                         <p className="text-[10px] text-muted-foreground">
                           {source.error ??
                             (source.status === "recognized"
-                              ? "自动识别完成"
+                              ? "识别完成，等待确认"
                               : source.status === "recognizing"
                                 ? "正在识别内容…"
                                 : "正在上传或读取…")}

@@ -359,6 +359,7 @@ function Index() {
       tab={state.tab}
       onTabChange={(tab) => setState((current) => ({ ...current, tab }))}
       onSelectTravel={(id) => setState((current) => ({ ...current, activeTravelId: id }))}
+      onCreateTravel={createTravel}
       onUpdateTravel={updateTravel}
       onRequireLogin={requestLogin}
     />

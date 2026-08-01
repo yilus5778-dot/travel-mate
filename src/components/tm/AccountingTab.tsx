@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  AlertCircle,
   ArrowRight,
+  CalendarDays,
   CheckCircle2,
   CircleDollarSign,
+  MapPin,
+  Plus,
   Receipt,
   Share2,
   Users,
+  Wallet,
   WalletCards,
 } from "lucide-react";
 import type { TabKey } from "./MiniShell";
@@ -16,7 +21,7 @@ import { CollaborationCenter } from "./CollaborationCenter";
 import { AccountingCenter } from "./AccountingCenter";
 import { Card, MiniShell, PrimaryButton, Tag } from "./MiniShell";
 
-type AccountingView = "home" | "detail" | "sample" | "share";
+type AccountingView = "home" | "detail" | "sample" | "share" | "create";
 
 function expense(
   title: string,
@@ -76,6 +81,53 @@ function createLedgerSampleTravel(): TravelItem {
       expense("大盘鸡晚餐", 368, "food", "阿南", "2026-10-02T12:00:00.000Z"),
       expense("景区区间车", 720, "ticket", "老周", "2026-10-03T12:00:00.000Z"),
     ],
+    settlements: [],
+    collaboration: null,
+    photos: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createEmptyLedgerTravel({
+  title,
+  destination,
+  dateText,
+  peopleCount,
+  budget,
+}: {
+  title: string;
+  destination: string;
+  dateText: string;
+  peopleCount: string;
+  budget: string;
+}): TravelItem {
+  const now = new Date().toISOString();
+  const cleanDestination = destination.trim();
+  const cleanTitle = title.trim() || `${cleanDestination}旅行账本`;
+  return {
+    id: `ledger-trip-${Date.now()}`,
+    title: cleanTitle,
+    departureCity: null,
+    destination: cleanDestination,
+    destinationPreference: null,
+    destinationCandidates: [],
+    dateStatus: dateText.trim() ? "confirmed" : "undecided",
+    dateText: dateText.trim() || null,
+    durationDays: null,
+    peopleCount: peopleCount ? Number(peopleCount) : null,
+    budget: budget ? Number(budget) : null,
+    status: "draft",
+    planningMode: "organize",
+    aiPlanStatus: "not_started",
+    aiSummary: null,
+    sourceMode: "multimodal",
+    sourceText: null,
+    sources: [],
+    itinerary: [],
+    orders: [],
+    members: [],
+    expenses: [],
     settlements: [],
     collaboration: null,
     photos: [],
@@ -181,12 +233,139 @@ function LedgerCard({
   );
 }
 
+function NewLedgerForm({
+  onCancel,
+  onCreate,
+}: {
+  onCancel: () => void;
+  onCreate: (travel: TravelItem) => void;
+}) {
+  const [destination, setDestination] = useState("");
+  const [title, setTitle] = useState("");
+  const [dateText, setDateText] = useState("");
+  const [peopleCount, setPeopleCount] = useState("");
+  const [budget, setBudget] = useState("");
+  const canCreate = destination.trim().length > 0;
+
+  const createLedger = () => {
+    if (!canCreate) return;
+    onCreate(
+      createEmptyLedgerTravel({
+        title,
+        destination,
+        dateText,
+        peopleCount,
+        budget,
+      }),
+    );
+  };
+
+  return (
+    <MiniShell title="新建记账" onBack={onCancel} showTabBar={false}>
+      <div className="space-y-4 px-5 pb-8 pt-2">
+        <Card className="relative overflow-hidden bg-brand-soft">
+          <div className="absolute -right-12 -top-14 size-40 rounded-full bg-card/45" />
+          <div className="relative">
+            <Tag tone="accent">真实账本</Tag>
+            <h2 className="mt-4 text-[22px] font-bold text-foreground">新建记账行程</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-foreground/70">
+              先按旅行地建一份空账本，再逐笔记录真实消费；未填写的信息会保持待确定。
+            </p>
+          </div>
+        </Card>
+
+        <Card>
+          <p className="text-[13px] font-semibold text-foreground">基础信息</p>
+          <div className="mt-3 space-y-3">
+            <label className="block">
+              <span className="text-[10px] text-muted-foreground">旅行地</span>
+              <div className="mt-1 flex items-center gap-2 rounded-[12px] bg-surface-sunk px-3 py-2.5">
+                <MapPin className="size-4 text-muted-foreground" />
+                <input
+                  value={destination}
+                  onChange={(event) => setDestination(event.target.value)}
+                  placeholder="例如：新疆"
+                  className="min-w-0 flex-1 bg-transparent text-[12px] outline-none"
+                />
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-[10px] text-muted-foreground">账本名称</span>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="不填则使用“旅行地 + 旅行账本”"
+                className="mt-1 w-full rounded-[12px] bg-surface-sunk px-3 py-2.5 text-[12px] outline-none"
+              />
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <label>
+                <span className="text-[10px] text-muted-foreground">日期</span>
+                <div className="mt-1 flex items-center gap-1 rounded-[12px] bg-surface-sunk px-2 py-2">
+                  <CalendarDays className="size-3.5 text-muted-foreground" />
+                  <input
+                    value={dateText}
+                    onChange={(event) => setDateText(event.target.value)}
+                    placeholder="待定"
+                    className="min-w-0 flex-1 bg-transparent text-[11px] outline-none"
+                  />
+                </div>
+              </label>
+              <label>
+                <span className="text-[10px] text-muted-foreground">人数</span>
+                <div className="mt-1 flex items-center gap-1 rounded-[12px] bg-surface-sunk px-2 py-2">
+                  <Users className="size-3.5 text-muted-foreground" />
+                  <input
+                    type="number"
+                    min={1}
+                    value={peopleCount}
+                    onChange={(event) => setPeopleCount(event.target.value)}
+                    placeholder="待定"
+                    className="min-w-0 flex-1 bg-transparent text-[11px] outline-none"
+                  />
+                </div>
+              </label>
+              <label>
+                <span className="text-[10px] text-muted-foreground">预算</span>
+                <div className="mt-1 flex items-center gap-1 rounded-[12px] bg-surface-sunk px-2 py-2">
+                  <Wallet className="size-3.5 text-muted-foreground" />
+                  <input
+                    type="number"
+                    min={0}
+                    value={budget}
+                    onChange={(event) => setBudget(event.target.value)}
+                    placeholder="待定"
+                    className="min-w-0 flex-1 bg-transparent text-[11px] outline-none"
+                  />
+                </div>
+              </label>
+            </div>
+          </div>
+        </Card>
+
+        <PrimaryButton disabled={!canCreate} onClick={createLedger}>
+          <span className="inline-flex items-center gap-1.5">
+            <Plus className="size-4" /> 创建记账行程
+          </span>
+        </PrimaryButton>
+        {!canCreate && (
+          <p className="-mt-2 flex items-start justify-center gap-1.5 text-center text-[10px] text-muted-foreground">
+            <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+            请先填写旅行地，方便按目的地归档账本
+          </p>
+        )}
+      </div>
+    </MiniShell>
+  );
+}
+
 export function AccountingTab({
   travels,
   activeTravelId,
   tab,
   onTabChange,
   onSelectTravel,
+  onCreateTravel,
   onUpdateTravel,
   onRequireLogin,
 }: {
@@ -195,6 +374,7 @@ export function AccountingTab({
   tab: TabKey;
   onTabChange: (tab: TabKey) => void;
   onSelectTravel: (id: string) => void;
+  onCreateTravel: (travel: TravelItem) => void;
   onUpdateTravel: (travel: TravelItem, options?: { sync?: boolean; action?: string }) => void;
   onRequireLogin: (reason: string, onAuthenticated?: () => void) => void;
 }) {
@@ -243,6 +423,16 @@ export function AccountingTab({
     );
   };
 
+  const createLedger = (travel: TravelItem) => {
+    onCreateTravel(travel);
+    setSelectedTravelId(travel.id);
+    setView("detail");
+  };
+
+  if (view === "create") {
+    return <NewLedgerForm onCancel={() => setView("home")} onCreate={createLedger} />;
+  }
+
   if (view === "share" && selectedTravel) {
     return (
       <CollaborationCenter
@@ -280,7 +470,17 @@ export function AccountingTab({
         <Card className="relative overflow-hidden bg-brand-soft">
           <div className="absolute -right-12 -top-14 size-40 rounded-full bg-card/45" />
           <div className="relative">
-            <Tag tone="accent">按旅行地归档</Tag>
+            <div className="flex items-start justify-between gap-3">
+              <Tag tone="accent">按旅行地归档</Tag>
+              <button
+                type="button"
+                onClick={() => setView("create")}
+                aria-label="新建记账"
+                className="flex size-10 shrink-0 items-center justify-center rounded-full bg-card text-foreground shadow-sm"
+              >
+                <Plus className="size-5" />
+              </button>
+            </div>
             <div className="mt-5 flex size-12 items-center justify-center rounded-[16px] bg-card/75">
               <WalletCards className="size-5 text-accent" />
             </div>
@@ -307,15 +507,22 @@ export function AccountingTab({
           </div>
         </Card>
 
-        {!travels.length && (
-          <Card className="text-center">
-            <Receipt className="mx-auto size-6 text-muted-foreground" />
-            <p className="mt-2 text-[13px] font-semibold text-foreground">还没有真实账本</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-              下面的新疆旅行是体验样例，只用于看清账本层级，不会进入你的历史旅行。
-            </p>
-          </Card>
-        )}
+        <button
+          type="button"
+          onClick={() => setView("create")}
+          className="flex w-full items-center gap-3 rounded-[16px] bg-card p-4 text-left shadow-[var(--shadow-card)] transition-transform active:scale-[0.99]"
+        >
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-[15px] bg-brand-soft">
+            <Plus className="size-5 text-foreground" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[14px] font-bold text-foreground">新建记账行程</span>
+            <span className="mt-0.5 block text-[10px] leading-relaxed text-muted-foreground">
+              先建空账本，再添加真实费用、成员和 AA 结算。
+            </span>
+          </span>
+          <ArrowRight className="size-4 text-muted-foreground" />
+        </button>
 
         {groups.map(([location, items]) => (
           <section key={location} className="space-y-2">

@@ -337,6 +337,10 @@ export function AccountingCenter({
                 {travel.collaboration ? "协作成员实时同步" : "仅当前旅行可见"}
               </span>
             </div>
+            <p className="mt-4 text-[16px] font-bold text-foreground">{travel.title}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              {travel.destination ?? "目的地待确定"} · {participants.length} 人账本
+            </p>
             <p className="mt-4 text-[10px] text-muted-foreground">当前总支出</p>
             <p className="mt-1 text-[28px] font-bold text-foreground">{formatMoney(total)}</p>
             <div className="mt-4 grid grid-cols-2 gap-2">

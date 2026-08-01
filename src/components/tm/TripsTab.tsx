@@ -28,6 +28,9 @@ import {
 import { COMPANIONS } from "@/lib/travelmate-data";
 import {
   buildSuggestedItinerary,
+  extractTravelIntent,
+  getDestinationCandidates,
+  organizePastedItinerary,
   TRAVEL_STATUS_LABELS,
   type CompanionProfile,
   type ExpenseCategory,
@@ -329,7 +332,7 @@ function StatusAction({
   onUpdate: (travel: TravelItem) => void;
 }) {
   const next: Partial<Record<TravelStatus, { label: string; status: TravelStatus }>> = {
-    draft: { label: "确认信息，进入待出发", status: "upcoming" },
+    draft: { label: "进入待出发", status: "upcoming" },
     upcoming: { label: "开始旅行", status: "active" },
     active: { label: "结束旅行", status: "completed" },
     completed: { label: "归档旅行", status: "archived" },
@@ -337,13 +340,16 @@ function StatusAction({
   const action = next[travel.status];
   if (!action) return null;
 
-  const draftIncomplete =
-    travel.status === "draft" &&
-    (!travel.destination ||
-      travel.dateStatus !== "confirmed" ||
-      !travel.dateText ||
-      !travel.peopleCount ||
-      travel.itinerary.length === 0);
+  const draftMissing =
+    travel.status === "draft"
+      ? [
+          !travel.destination ? "目的地" : null,
+          !travel.dateText || travel.dateStatus !== "confirmed" ? "已确认日期" : null,
+          !travel.peopleCount ? "人数" : null,
+          travel.itinerary.length === 0 ? "基础行程" : null,
+        ].filter(Boolean)
+      : [];
+  const draftIncomplete = draftMissing.length > 0;
 
   return (
     <div>
@@ -353,6 +359,14 @@ function StatusAction({
           onUpdate({
             ...travel,
             status: action.status,
+            dateStatus:
+              travel.status === "draft" && action.status === "upcoming"
+                ? "confirmed"
+                : travel.dateStatus,
+            itinerary:
+              travel.status === "draft" && action.status === "upcoming"
+                ? travel.itinerary.map((item) => ({ ...item, confirmed: true }))
+                : travel.itinerary,
             updatedAt: new Date().toISOString(),
           })
         }
@@ -361,7 +375,7 @@ function StatusAction({
       </PrimaryButton>
       {draftIncomplete && (
         <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          请先确认目的地、日期和人数，并生成基础行程
+          还差：{draftMissing.join("、")}
         </p>
       )}
     </div>
@@ -677,9 +691,9 @@ function DraftView({
 
   const missing = [
     !travel.destination ? "具体目的地" : null,
-    travel.dateStatus !== "confirmed" ? "具体日期" : null,
+    !travel.dateText || travel.dateStatus !== "confirmed" ? "具体日期" : null,
     !travel.peopleCount ? "同行人数" : null,
-    !travel.budget ? "预算" : null,
+    travel.itinerary.length === 0 ? "基础行程" : null,
   ].filter(Boolean) as string[];
 
   const generatePlan = () => {
@@ -705,7 +719,11 @@ function DraftView({
         name: value,
         status: "recognized",
       };
-      patchTravel({ sources: [...travel.sources, source] });
+      patchTravel({
+        sources: [...travel.sources, source],
+        aiSummary:
+          "网页链接已加入资料识别。当前原型不会只凭 URL 编造行程；正式接入网页正文读取后，会把识别结果放入待确认项。",
+      });
       setLink("");
       setLinkError("");
     } catch {
@@ -713,50 +731,63 @@ function DraftView({
     }
   };
 
+  const addSupplement = () => {
+    const value = supplement.trim();
+    if (!value) return;
+    const intent = extractTravelIntent(value);
+    const organized = intent.looksLikeItinerary ? organizePastedItinerary(value) : [];
+    const candidates = intent.destination
+      ? [intent.destination]
+      : getDestinationCandidates(intent.destinationPreference);
+
+    patchTravel({
+      sourceText: [travel.sourceText, value].filter(Boolean).join("\n"),
+      destination: travel.destination ?? intent.destination ?? candidates[0] ?? null,
+      destinationPreference: travel.destinationPreference ?? intent.destinationPreference ?? null,
+      destinationCandidates: travel.destinationCandidates.length
+        ? travel.destinationCandidates
+        : candidates,
+      dateStatus: travel.dateStatus !== "undecided" ? travel.dateStatus : intent.dateStatus,
+      dateText: travel.dateText ?? intent.dateText,
+      durationDays: travel.durationDays ?? intent.durationDays,
+      peopleCount: travel.peopleCount ?? intent.peopleCount,
+      itinerary: organized.length ? [...travel.itinerary, ...organized] : travel.itinerary,
+      aiPlanStatus: organized.length ? "organized" : travel.aiPlanStatus,
+      aiSummary: organized.length
+        ? `已从补充文字中结构化 ${organized.length} 项行程，原文之外的信息不会自动补写。`
+        : "已收到新的文字补充。点击“生成/补全按天行程”即可纳入下一版建议。",
+    });
+    setSupplement("");
+  };
+
   return (
     <div className="space-y-3">
       <Card>
-        <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-accent" />
-          <p className="text-[14px] font-semibold text-foreground">AI 初步建议</p>
+        <div className="flex items-center justify-between">
+          <p className="text-[14px] font-semibold text-foreground">基础信息</p>
+          <Tag tone={missing.length ? "muted" : "accent"}>
+            {missing.length ? `${missing.length} 项待补` : "可进入待出发"}
+          </Tag>
         </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-foreground/75">
-          {travel.aiSummary ?? "我会基于你已经提供的信息生成方案；还没有的信息会继续保持待确认。"}
-        </p>
-        <div className="mt-3 rounded-[12px] bg-surface-sunk p-3">
-          <p className="text-[11px] font-medium text-foreground">
-            待确认：{missing.length ? missing.join("、") : "基础信息已完整"}
-          </p>
-          <p className="mt-1 text-[10px] text-muted-foreground">
-            推荐下一步：
-            {travel.itinerary.length ? "调整每天安排并确认日期" : "先生成一版可编辑行程"}
-          </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {[
+            [MapPin, "目的地", travel.destination ?? travel.destinationPreference],
+            [CalendarDays, "日期", travel.dateText],
+            [Users, "人数", travel.peopleCount ? `${travel.peopleCount} 人` : null],
+            [Route, "行程", travel.itinerary.length ? `${travel.itinerary.length} 项` : null],
+          ].map(([Icon, label, value]) => {
+            const FieldIcon = Icon as typeof MapPin;
+            return (
+              <div key={String(label)} className="rounded-[12px] bg-surface-sunk p-3">
+                <FieldIcon className="size-3.5 text-muted-foreground" />
+                <p className="mt-1 text-[10px] text-muted-foreground">{String(label)}</p>
+                <p className="mt-0.5 text-[12px] font-medium text-foreground">
+                  {valueOrPending(value as string | number | null)}
+                </p>
+              </div>
+            );
+          })}
         </div>
-        <button
-          onClick={generatePlan}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[12px] bg-brand-soft py-2.5 text-[12px] font-semibold text-foreground"
-        >
-          <Sparkles className="size-4" />
-          {travel.itinerary.length ? "让 AI 重新补全方案" : "直接生成行程"}
-        </button>
-      </Card>
-
-      {travel.itinerary.length ? (
-        <DayPlanEditor travel={travel} onPatch={patchTravel} />
-      ) : (
-        <Card className="text-center">
-          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-brand-soft">
-            <Route className="size-5 text-accent" />
-          </div>
-          <p className="mt-3 text-[14px] font-semibold text-foreground">还没有按天行程</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            点击上方“直接生成行程”，AI 会自动整理成按天标签、当天时间线和路线导航。
-          </p>
-        </Card>
-      )}
-
-      <Card>
-        <p className="text-[14px] font-semibold text-foreground">编辑基础信息</p>
         <div className="mt-3 space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <label>
@@ -788,7 +819,12 @@ function DraftView({
               <span className="text-[10px] text-muted-foreground">日期</span>
               <input
                 value={travel.dateText ?? ""}
-                onChange={(event) => patchTravel({ dateText: event.target.value || null })}
+                onChange={(event) =>
+                  patchTravel({
+                    dateText: event.target.value || null,
+                    dateStatus: event.target.value.trim() ? "confirmed" : "undecided",
+                  })
+                }
                 placeholder="待确认"
                 className="mt-1 w-full rounded-[11px] bg-surface-sunk px-3 py-2 text-[12px] outline-none"
               />
@@ -858,10 +894,17 @@ function DraftView({
             </label>
           </div>
         </div>
+        <button
+          onClick={generatePlan}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[12px] bg-brand-soft py-2.5 text-[12px] font-semibold text-foreground"
+        >
+          <Sparkles className="size-4" />
+          {travel.itinerary.length ? "生成/补全按天行程" : "直接生成按天行程"}
+        </button>
       </Card>
 
       <Card>
-        <p className="text-[14px] font-semibold text-foreground">继续补充内容</p>
+        <p className="text-[14px] font-semibold text-foreground">继续补充资料</p>
         <textarea
           value={supplement}
           onChange={(event) => setSupplement(event.target.value)}
@@ -871,13 +914,7 @@ function DraftView({
         />
         <button
           disabled={!supplement.trim()}
-          onClick={() => {
-            patchTravel({
-              sourceText: [travel.sourceText, supplement.trim()].filter(Boolean).join("\n"),
-              aiSummary: "已收到新的文字补充。点击“让 AI 重新补全方案”即可纳入下一版建议。",
-            });
-            setSupplement("");
-          }}
+          onClick={addSupplement}
           className="mt-2 w-full rounded-[11px] bg-brand-soft py-2 text-[11px] font-medium text-foreground disabled:opacity-40"
         >
           加入旅行资料
@@ -918,7 +955,11 @@ function DraftView({
               name: file.name,
               status: "recognized",
             }));
-            patchTravel({ sources: [...travel.sources, ...added] });
+            patchTravel({
+              sources: [...travel.sources, ...added],
+              aiSummary:
+                "图片已加入资料识别。当前原型不会从图片文件名编造行程；正式接入 OCR 后，会把识别结果放入待确认项。",
+            });
             event.target.value = "";
           }}
         />
@@ -953,6 +994,20 @@ function DraftView({
           </div>
         )}
       </Card>
+
+      {travel.itinerary.length ? (
+        <DayPlanEditor travel={travel} onPatch={patchTravel} />
+      ) : (
+        <Card className="text-center">
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-brand-soft">
+            <Route className="size-5 text-accent" />
+          </div>
+          <p className="mt-3 text-[14px] font-semibold text-foreground">还没有按天行程</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            可以先粘贴完整 D1/D2 行程，或点击上方生成按天标签、时间线和路线导航。
+          </p>
+        </Card>
+      )}
 
       <StatusAction travel={travel} onUpdate={onUpdate} />
 
