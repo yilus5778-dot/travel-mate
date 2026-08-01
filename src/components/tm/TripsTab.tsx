@@ -604,6 +604,35 @@ function DayPlanEditor({
           <Plus className="size-3.5" /> 添加当天行程
         </button>
 
+        {travel.status === "draft" && (
+          <div className="mt-3 rounded-[15px] bg-card/75 p-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-semibold text-foreground">AI 规划</p>
+              <span className="text-[9px] text-muted-foreground">可选</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const days = travel.durationDays ?? dayCount;
+                onPatch({
+                  itinerary: buildSuggestedItinerary(travel.destination, days),
+                  durationDays: days,
+                  aiPlanStatus: "generated",
+                  aiSummary: `已根据“${
+                    travel.destinationPreference || travel.destination || "当前旅行"
+                  }”重新生成 ${days} 天可编辑方案。`,
+                });
+              }}
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-[12px] bg-surface-sunk px-3 py-2.5 text-left"
+            >
+              <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-foreground">
+                <Sparkles className="size-3.5 text-accent" /> 重新生成按天计划
+              </span>
+              <span className="text-[9px] text-muted-foreground">{travel.itinerary.length} 项</span>
+            </button>
+          </div>
+        )}
+
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between">
             <div>
@@ -671,20 +700,17 @@ function TripHeroCard({
   travel,
   onUpdate,
   onOpenAccounting,
-  onOpenCollaboration,
   onOpenGroupShare,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
   onOpenAccounting: () => void;
-  onOpenCollaboration: () => void;
   onOpenGroupShare: () => void;
 }) {
   const [link, setLink] = useState("");
   const [linkError, setLinkError] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
   const isDraft = travel.status === "draft";
-  const missing = draftMissingLabels(travel);
   const dateLabel = displayTravelDate(travel.dateText, travel.durationDays);
   const canShare = Boolean(travel.destination) && travel.itinerary.length > 0;
   const totalExpense = travel.expenses.reduce((sum, item) => sum + item.amount, 0);
@@ -738,67 +764,93 @@ function TripHeroCard({
         <Navigation className="size-6 text-accent" />
       </div>
       <div className="relative p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Tag tone={travel.status === "active" ? "accent" : "brand"}>
-              {TRAVEL_STATUS_LABELS[travel.status]}
-            </Tag>
-            <p className="mt-4 text-[11px] font-medium text-muted-foreground">
-              {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
-            </p>
-            <h2 className="mt-1 max-w-[13.5rem] text-[24px] font-bold leading-snug text-foreground">
-              {travel.title}
-            </h2>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <span className="rounded-full bg-card/75 px-3 py-1 text-[11px] font-semibold text-foreground">
-              {travel.peopleCount ? `${travel.peopleCount} 人` : "人数待定"}
-            </span>
-            {canShare && (
-              <button
-                type="button"
-                onClick={onOpenGroupShare}
-                className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-[10px] font-semibold text-accent-foreground shadow-sm"
-              >
-                <Send className="size-3" /> 分享
-              </button>
-            )}
-          </div>
+        <div className="min-w-0">
+          <Tag tone={travel.status === "active" ? "accent" : "brand"}>
+            {TRAVEL_STATUS_LABELS[travel.status]}
+          </Tag>
+          <p className="mt-4 text-[11px] font-medium text-muted-foreground">
+            {travel.destination ?? travel.destinationPreference ?? "目的地待确定"}
+          </p>
+          <h2 className="mt-1 max-w-[13.5rem] text-[24px] font-bold leading-snug text-foreground">
+            {travel.title}
+          </h2>
         </div>
 
         <div className="mt-6 grid grid-cols-3 gap-2">
-          <div className="rounded-[13px] bg-surface-sunk p-2.5">
+          <label className="rounded-[13px] bg-surface-sunk p-2.5">
             <CalendarDays className="size-3.5 text-muted-foreground" />
-            <p className="mt-1 text-[10px] font-medium text-foreground">
-              {dateLabel ?? "日期待定"}
-            </p>
-          </div>
-          <div className="rounded-[13px] bg-surface-sunk p-2.5">
+            <input
+              value={dateLabel ?? ""}
+              onChange={(event) =>
+                patchTravel({
+                  dateText: event.target.value || null,
+                  dateStatus: event.target.value.trim() ? "confirmed" : "undecided",
+                })
+              }
+              placeholder="日期待定"
+              className="mt-1 w-full bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+          <label className="rounded-[13px] bg-surface-sunk p-2.5">
             <Users className="size-3.5 text-muted-foreground" />
-            <p className="mt-1 text-[10px] font-medium text-foreground">
-              {travel.peopleCount ? `${travel.peopleCount} 人` : "人数待定"}
-            </p>
-          </div>
-          <div className="rounded-[13px] bg-surface-sunk p-2.5">
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                value={travel.peopleCount ?? ""}
+                onChange={(event) =>
+                  patchTravel({
+                    peopleCount: event.target.value ? Number(event.target.value) : null,
+                  })
+                }
+                placeholder="人数"
+                className="min-w-0 flex-1 bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <span className="text-[10px] font-medium text-foreground">人</span>
+            </div>
+          </label>
+          <label className="rounded-[13px] bg-surface-sunk p-2.5">
             <ClipboardList className="size-3.5 text-muted-foreground" />
-            <p className="mt-1 text-[10px] font-medium text-foreground">
-              {travel.itinerary.length ? `${travel.itinerary.length} 项安排` : "待生成行程"}
-            </p>
-          </div>
+            <div className="mt-1 flex items-center gap-1">
+              <input
+                type="number"
+                min={1}
+                value={travel.durationDays ?? ""}
+                onChange={(event) =>
+                  patchTravel({
+                    durationDays: event.target.value ? Number(event.target.value) : null,
+                  })
+                }
+                placeholder="天数"
+                className="min-w-0 flex-1 bg-transparent text-[10px] font-medium text-foreground outline-none placeholder:text-muted-foreground"
+              />
+              <span className="text-[10px] font-medium text-foreground">
+                天 · {travel.itinerary.length ? `${travel.itinerary.length}项` : "待生成"}
+              </span>
+            </div>
+          </label>
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onOpenAccounting}
-            className="rounded-[13px] bg-surface-sunk p-3 text-left"
-          >
+          <label className="rounded-[13px] bg-surface-sunk p-3 text-left">
             <Wallet className="size-4 text-accent" />
             <p className="mt-2 text-[9px] text-muted-foreground">旅行预算</p>
-            <p className="mt-0.5 text-[12px] font-bold text-foreground">
-              {travel.budget === null ? "待设置" : `¥${travel.budget}`}
-            </p>
-          </button>
+            <div className="mt-0.5 flex items-center gap-1">
+              <span className="text-[12px] font-bold text-foreground">¥</span>
+              <input
+                type="number"
+                min={0}
+                value={travel.budget ?? ""}
+                onChange={(event) =>
+                  patchTravel({
+                    budget: event.target.value ? Number(event.target.value) : null,
+                  })
+                }
+                placeholder="待设置"
+                className="min-w-0 flex-1 bg-transparent text-[12px] font-bold text-foreground outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+          </label>
           <button
             type="button"
             onClick={onOpenAccounting}
@@ -818,146 +870,13 @@ function TripHeroCard({
         </div>
 
         {canShare && (
-          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
+          <div className="mt-3 border-t border-border pt-3">
             <button
               type="button"
               onClick={onOpenGroupShare}
-              className="flex items-center justify-center gap-1.5 rounded-[12px] bg-primary py-2.5 text-[10px] font-semibold text-primary-foreground"
+              className="flex w-full items-center justify-center gap-1.5 rounded-[12px] bg-primary py-2.5 text-[10px] font-semibold text-primary-foreground"
             >
               <Share2 className="size-3.5" /> 分享行程到群
-            </button>
-            <button
-              type="button"
-              onClick={onOpenCollaboration}
-              className="flex items-center justify-center gap-1.5 rounded-[12px] bg-card py-2.5 text-[10px] font-semibold text-foreground shadow-sm"
-            >
-              <Users className="size-3.5 text-accent" />
-              {travel.collaboration
-                ? `协作 · ${travel.collaboration.members.length} 人`
-                : "协作旅行"}
-            </button>
-          </div>
-        )}
-
-        {isDraft && (
-          <div className="mt-3 rounded-[15px] bg-surface-sunk/80 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-foreground">基础信息</p>
-              <Tag tone={missing.length ? "muted" : "accent"}>
-                {missing.length ? `${missing.length} 项待补` : "可出发前确认"}
-              </Tag>
-            </div>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <label>
-                <span className="text-[9px] text-muted-foreground">出发</span>
-                <input
-                  value={travel.departureCity ?? ""}
-                  onChange={(event) => patchTravel({ departureCity: event.target.value || null })}
-                  placeholder="待确认"
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-              <label>
-                <span className="text-[9px] text-muted-foreground">目的地</span>
-                <input
-                  value={travel.destination ?? ""}
-                  onChange={(event) =>
-                    patchTravel({
-                      destination: event.target.value || null,
-                      title: event.target.value
-                        ? `${event.target.value}旅行草稿`
-                        : "未命名旅行草稿",
-                    })
-                  }
-                  placeholder={travel.destinationPreference || "待确认"}
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-              <label>
-                <span className="text-[9px] text-muted-foreground">日期</span>
-                <input
-                  value={dateLabel ?? ""}
-                  onChange={(event) =>
-                    patchTravel({
-                      dateText: event.target.value || null,
-                      dateStatus: event.target.value.trim() ? "confirmed" : "undecided",
-                    })
-                  }
-                  placeholder="待确认"
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-              <label>
-                <span className="text-[9px] text-muted-foreground">日期状态</span>
-                <select
-                  value={travel.dateStatus}
-                  onChange={(event) =>
-                    patchTravel({
-                      dateStatus: event.target.value as TravelItem["dateStatus"],
-                    })
-                  }
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                >
-                  <option value="undecided">待确定</option>
-                  <option value="approximate">大概时间</option>
-                  <option value="confirmed">已确认</option>
-                </select>
-              </label>
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              <label>
-                <span className="text-[9px] text-muted-foreground">天数</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={travel.durationDays ?? ""}
-                  onChange={(event) =>
-                    patchTravel({
-                      durationDays: event.target.value ? Number(event.target.value) : null,
-                    })
-                  }
-                  placeholder="待定"
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-              <label>
-                <span className="text-[9px] text-muted-foreground">人数</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={travel.peopleCount ?? ""}
-                  onChange={(event) =>
-                    patchTravel({
-                      peopleCount: event.target.value ? Number(event.target.value) : null,
-                    })
-                  }
-                  placeholder="待定"
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-              <label>
-                <span className="text-[9px] text-muted-foreground">预算</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={travel.budget ?? ""}
-                  onChange={(event) =>
-                    patchTravel({
-                      budget: event.target.value ? Number(event.target.value) : null,
-                    })
-                  }
-                  placeholder="待定"
-                  className="mt-1 w-full rounded-[10px] bg-card/80 px-2 py-1.5 text-[11px] outline-none"
-                />
-              </label>
-            </div>
-            <button
-              type="button"
-              onClick={generatePlan}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-[11px] bg-card py-2 text-[11px] font-semibold text-foreground"
-            >
-              <Sparkles className="size-3.5 text-accent" />
-              {travel.itinerary.length ? "生成/补全按天行程" : "直接生成按天行程"}
             </button>
           </div>
         )}
@@ -1993,7 +1912,6 @@ export function TripsTab({
           travel={travel}
           onUpdate={onUpdateTravel}
           onOpenAccounting={() => setView("accounting")}
-          onOpenCollaboration={() => startShare(travel, "trip")}
           onOpenGroupShare={() => startGroupShare(travel, "trip")}
         />
         {travel.status === "draft" && (
