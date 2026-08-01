@@ -604,35 +604,6 @@ function DayPlanEditor({
           <Plus className="size-3.5" /> 添加当天行程
         </button>
 
-        {travel.status === "draft" && (
-          <div className="mt-3 rounded-[15px] bg-card/75 p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-[11px] font-semibold text-foreground">AI 规划</p>
-              <span className="text-[9px] text-muted-foreground">可选</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const days = travel.durationDays ?? dayCount;
-                onPatch({
-                  itinerary: buildSuggestedItinerary(travel.destination, days),
-                  durationDays: days,
-                  aiPlanStatus: "generated",
-                  aiSummary: `已根据“${
-                    travel.destinationPreference || travel.destination || "当前旅行"
-                  }”重新生成 ${days} 天可编辑方案。`,
-                });
-              }}
-              className="mt-2 flex w-full items-center justify-between gap-2 rounded-[12px] bg-surface-sunk px-3 py-2.5 text-left"
-            >
-              <span className="inline-flex items-center gap-2 text-[11px] font-semibold text-foreground">
-                <Sparkles className="size-3.5 text-accent" /> 重新生成按天计划
-              </span>
-              <span className="text-[9px] text-muted-foreground">{travel.itinerary.length} 项</span>
-            </button>
-          </div>
-        )}
-
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between">
             <div>
