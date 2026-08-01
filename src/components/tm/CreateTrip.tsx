@@ -1,20 +1,15 @@
 import { useRef, useState } from "react";
 import {
   AlertCircle,
-  CalendarDays,
   Camera,
   Check,
-  Clock3,
   FileSearch,
   ImageUp,
   Link2,
   LoaderCircle,
-  MapPin,
   Route,
   Sparkles,
   Trash2,
-  Users,
-  Wallet,
 } from "lucide-react";
 import {
   buildSuggestedItinerary,
@@ -38,10 +33,6 @@ import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
 type Step = "input" | "analyzing" | "questions" | "preview";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-function valueOrFallback(value: string | number | null, fallback = "可稍后补") {
-  return value === null || value === "" ? fallback : String(value);
-}
 
 function evidenceMeta(
   evidence: ItineraryEvidence | undefined,
@@ -322,43 +313,6 @@ export function CreateTrip({
     if (step === "preview") return setStep(planningMode === "plan" ? "questions" : "input");
   };
 
-  const infoCards: Array<{
-    Icon: typeof MapPin;
-    label: string;
-    value: string | null;
-    status: string;
-    tone: "muted" | "brand" | "accent";
-  }> = [
-    {
-      Icon: MapPin,
-      label: "目的地",
-      value: destination || destinationPreference || null,
-      status: destinationPreference && destination ? "AI 建议" : destination ? "已确认" : "需补充",
-      tone: destinationPreference && destination ? "accent" : destination ? "brand" : "muted",
-    },
-    {
-      Icon: CalendarDays,
-      label: "日期",
-      value: dateLabel || null,
-      status: dateStatus === "confirmed" ? "已确认" : dateLabel ? "需确认" : "可稍后补",
-      tone: dateStatus === "confirmed" ? "brand" : dateLabel ? "muted" : "muted",
-    },
-    {
-      Icon: Clock3,
-      label: "时长",
-      value: durationDays ? `${durationDays} 天` : null,
-      status: durationDays ? "已确认" : "可稍后补",
-      tone: durationDays ? "brand" : "muted",
-    },
-    {
-      Icon: Users,
-      label: "人数",
-      value: peopleCount ? `${peopleCount} 人` : null,
-      status: peopleCount ? "已确认" : "可稍后补",
-      tone: peopleCount ? "brand" : "muted",
-    },
-  ];
-
   return (
     <MiniShell title="创建新旅行" onBack={back} showTabBar={false}>
       <div className="space-y-4 px-5 pb-8 pt-2">
@@ -592,40 +546,6 @@ export function CreateTrip({
 
         {step === "preview" && (
           <>
-            <Card>
-              <div className="flex items-center justify-between">
-                <Tag tone={planningMode === "plan" ? "accent" : "brand"}>
-                  {planningMode === "plan" ? "AI 可执行攻略" : "AI 结构化结果"}
-                </Tag>
-                <Sparkles className="size-4 text-accent" />
-              </div>
-              <p className="mt-3 text-[13px] leading-relaxed text-foreground/80">{aiSummary}</p>
-            </Card>
-
-            <Card>
-              <p className="text-[13px] font-semibold text-foreground">信息状态</p>
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                只有动态变化或缺失的信息才需要用户再确认。
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {infoCards.map(({ Icon, label, value, status, tone }) => {
-                  const FieldIcon = Icon;
-                  return (
-                    <div key={label} className="rounded-[12px] bg-surface-sunk p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <FieldIcon className="size-3.5 text-muted-foreground" />
-                        <Tag tone={tone}>{status}</Tag>
-                      </div>
-                      <p className="mt-2 text-[10px] text-muted-foreground">{label}</p>
-                      <p className="mt-0.5 text-[12px] font-semibold text-foreground">
-                        {valueOrFallback(value)}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-
             <Card>
               <div className="flex items-center justify-between">
                 <p className="text-[13px] font-semibold text-foreground">可编辑攻略</p>
