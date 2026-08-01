@@ -11,6 +11,8 @@ export type ExpenseCategory = "food" | "transport" | "hotel" | "ticket" | "shopp
 export type ExpenseSplitMode = "equal" | "custom" | "personal";
 export type CollaborationRole = "owner" | "editor" | "viewer";
 export type ItineraryEvidence = "confirmed" | "queried" | "suggested" | "needs_check";
+export type PackingCategory = "documents" | "electronics" | "clothing" | "health" | "destination";
+export type PackingSource = "essential" | "season" | "destination" | "custom";
 
 export interface SourceItem {
   id: string;
@@ -62,6 +64,16 @@ export interface SettlementItem {
   settledAt: string;
 }
 
+export interface PackingItem {
+  id: string;
+  name: string;
+  category: PackingCategory;
+  reason: string;
+  source: PackingSource;
+  checked: boolean;
+  required: boolean;
+}
+
 export interface CollaborationMember {
   id: string;
   name: string;
@@ -107,6 +119,7 @@ export interface TravelItem {
   sourceText: string | null;
   sources: SourceItem[];
   itinerary: ItineraryItem[];
+  packingChecklist: PackingItem[];
   orders: Array<{ id: string; title: string }>;
   members: Array<{ id: string; name: string }>;
   expenses: ExpenseItem[];
@@ -907,6 +920,245 @@ export function organizePastedItinerary(textValue: string): ItineraryItem[] {
   }));
 }
 
+function inferTravelMonth(dateText: string | null) {
+  if (!dateText) return null;
+  if (dateText.includes("国庆")) return 10;
+  const match = dateText.match(/(\d{1,2})\s*月/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  return month >= 1 && month <= 12 ? month : null;
+}
+
+function inferPackingSeason(dateText: string | null) {
+  const month = inferTravelMonth(dateText);
+  if (!month) return "未知季节";
+  if ([12, 1, 2].includes(month)) return "冬季";
+  if ([3, 4, 5].includes(month)) return "春季";
+  if ([6, 7, 8].includes(month)) return "夏季";
+  return "秋季";
+}
+
+function packingItem(
+  id: string,
+  name: string,
+  category: PackingCategory,
+  reason: string,
+  source: PackingSource,
+  required = true,
+): PackingItem {
+  return { id, name, category, reason, source, checked: false, required };
+}
+
+export function buildPackingChecklist(travel: Pick<TravelItem, "destination" | "dateText">) {
+  const destination = travel.destination ?? "";
+  const destinationText = destination || "目的地";
+  const season = inferPackingSeason(travel.dateText);
+  const isCoastal = /海|岛|厦门|青岛|北海|三亚|秦皇岛|鼓浪屿|银滩|涠洲/.test(destinationText);
+  const isMountain = /山|大理|昆明|恒山|崂山|悬空|高原/.test(destinationText);
+  const isCityWalk = /北京|上海|成都|重庆|杭州|苏州|西安|南京|长沙|大同|古城|街/.test(
+    destinationText,
+  );
+  const items: PackingItem[] = [
+    packingItem(
+      "doc-id-card",
+      "身份证",
+      "documents",
+      "住宿、交通和多数景区实名核验都需要。",
+      "essential",
+    ),
+    packingItem(
+      "doc-ticket-screenshots",
+      "车票 / 酒店 / 门票截图",
+      "documents",
+      "网络不稳定时也能快速出示订单和预约信息。",
+      "essential",
+    ),
+    packingItem(
+      "doc-student-card",
+      "学生证或优惠证件",
+      "documents",
+      "部分景点可用优惠票；没有可直接取消。",
+      "essential",
+      false,
+    ),
+    packingItem(
+      "elec-power-bank",
+      "充电宝",
+      "electronics",
+      "全天导航、拍照和群协作会明显耗电。",
+      "essential",
+    ),
+    packingItem(
+      "elec-cables",
+      "充电器和数据线",
+      "electronics",
+      "手机、耳机和相机等设备统一补电。",
+      "essential",
+    ),
+    packingItem(
+      "elec-earphones",
+      "耳机",
+      "electronics",
+      "长途交通和排队等待时更方便。",
+      "essential",
+      false,
+    ),
+    packingItem(
+      "health-medicine",
+      "常用药",
+      "health",
+      "感冒、肠胃和过敏药按个人情况带。",
+      "essential",
+    ),
+    packingItem(
+      "health-bandage",
+      "创可贴 / 酒精棉片",
+      "health",
+      "长时间步行、磨脚或小擦伤时用得上。",
+      "essential",
+      false,
+    ),
+  ];
+
+  if (season === "夏季") {
+    items.push(
+      packingItem(
+        "cloth-summer-quick-dry",
+        "轻薄透气衣物",
+        "clothing",
+        "夏季出行更适合速干、透气材质。",
+        "season",
+      ),
+      packingItem(
+        "cloth-sun-shirt",
+        "防晒衣 / 遮阳帽",
+        "clothing",
+        "户外暴晒时间长时更舒服。",
+        "season",
+      ),
+    );
+  } else if (season === "冬季") {
+    items.push(
+      packingItem(
+        "cloth-winter-coat",
+        "厚外套 / 羽绒服",
+        "clothing",
+        "冬季早晚和户外等候时保暖优先。",
+        "season",
+      ),
+      packingItem(
+        "cloth-winter-warmers",
+        "围巾 / 手套 / 暖宝宝",
+        "clothing",
+        "低温或风大时用于补充保暖。",
+        "season",
+        false,
+      ),
+    );
+  } else if (season === "春季" || season === "秋季") {
+    items.push(
+      packingItem(
+        "cloth-light-jacket",
+        "薄外套或防风外套",
+        "clothing",
+        `${season}温差较大，早晚和海边风大时需要。`,
+        "season",
+      ),
+      packingItem(
+        "cloth-long-sleeve",
+        "长袖和轻便长裤",
+        "clothing",
+        "兼顾白天活动和夜间降温。",
+        "season",
+      ),
+    );
+  } else {
+    items.push(
+      packingItem(
+        "cloth-layering",
+        "可叠穿衣物",
+        "clothing",
+        "日期未完全确定时，用叠穿适配温差。",
+        "season",
+      ),
+      packingItem(
+        "cloth-comfy-shoes",
+        "舒适步行鞋",
+        "clothing",
+        "旅行中步行时间通常比日常更长。",
+        "essential",
+      ),
+    );
+  }
+
+  if (isCoastal) {
+    items.push(
+      packingItem(
+        "dest-sunscreen",
+        "防晒霜",
+        "destination",
+        `${destinationText}有海边或户外路线，防晒很重要。`,
+        "destination",
+      ),
+      packingItem(
+        "dest-wind-jacket",
+        "防风外套",
+        "destination",
+        "海边昼夜温差和风感会放大体感温度。",
+        "destination",
+      ),
+      packingItem(
+        "dest-waterproof-bag",
+        "防水袋 / 密封袋",
+        "destination",
+        "海边、沙滩和雨天都能保护证件与电子设备。",
+        "destination",
+        false,
+      ),
+    );
+  }
+  if (isMountain) {
+    items.push(
+      packingItem(
+        "dest-nonslip-shoes",
+        "防滑舒适鞋",
+        "destination",
+        `${destinationText}可能有山路、石板路或长坡。`,
+        "destination",
+      ),
+      packingItem(
+        "dest-small-backpack",
+        "轻便双肩包",
+        "destination",
+        "装水、外套和药品，走远路更省力。",
+        "destination",
+      ),
+    );
+  }
+  if (isCityWalk || (!isCoastal && !isMountain)) {
+    items.push(
+      packingItem(
+        "dest-walking-shoes",
+        "舒适步行鞋",
+        "destination",
+        "城市步行、古城街区和换乘都更依赖脚感。",
+        "destination",
+      ),
+      packingItem(
+        "dest-tissues",
+        "纸巾 / 湿巾",
+        "destination",
+        "餐饮、市集和公共交通中都很常用。",
+        "destination",
+      ),
+    );
+  }
+
+  return items.filter(
+    (item, index, list) => list.findIndex((entry) => entry.name === item.name) === index,
+  );
+}
+
 export function createTravelDraft({
   inputText,
   departureCity,
@@ -963,6 +1215,7 @@ export function createTravelDraft({
     sourceText: inputText.trim() || null,
     sources: sources ?? [],
     itinerary: itinerary ?? [],
+    packingChecklist: [],
     orders: [],
     members: [],
     expenses: [],
@@ -996,6 +1249,7 @@ export function normalizeTravelItem(travel: TravelItem): TravelItem {
     planningMode: legacy.planningMode ?? (travel.sourceMode === "material" ? "organize" : "plan"),
     aiPlanStatus: legacy.aiPlanStatus ?? (travel.itinerary?.length ? "organized" : "not_started"),
     aiSummary: legacy.aiSummary ?? null,
+    packingChecklist: legacy.packingChecklist ?? [],
     itinerary: (travel.itinerary ?? []).map((item, index) => ({
       ...item,
       day: item.day ?? index + 1,

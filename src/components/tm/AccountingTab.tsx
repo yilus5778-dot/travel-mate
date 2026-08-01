@@ -69,6 +69,7 @@ function createLedgerSampleTravel(): TravelItem {
     sourceText: null,
     sources: [],
     itinerary: [],
+    packingChecklist: [],
     orders: [],
     members: [
       { id: "member-anan", name: "阿南" },
@@ -125,6 +126,7 @@ function createEmptyLedgerTravel({
     sourceText: null,
     sources: [],
     itinerary: [],
+    packingChecklist: [],
     orders: [],
     members: [],
     expenses: [],

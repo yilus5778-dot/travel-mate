@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { COMPANIONS } from "@/lib/travelmate-data";
 import {
+  buildPackingChecklist,
   buildSuggestedItinerary,
   displayTravelDate,
   TRAVEL_STATUS_LABELS,
@@ -35,6 +36,8 @@ import {
   type ExpenseCategory,
   type ItineraryEvidence,
   type ItineraryItem,
+  type PackingCategory,
+  type PackingItem,
   type SourceItem,
   type TravelItem,
   type TravelStatus,
@@ -375,6 +378,237 @@ const EXPENSE_CATEGORIES: Array<{
 
 function formatMoney(value: number) {
   return `¥${value.toFixed(2).replace(/\.00$/, "")}`;
+}
+
+const PACKING_CATEGORY_META: Record<
+  PackingCategory,
+  {
+    label: string;
+    emoji: string;
+    description: string;
+  }
+> = {
+  documents: {
+    label: "证件订单",
+    emoji: "🪪",
+    description: "实名核验、入住和交通会用到。",
+  },
+  electronics: {
+    label: "电子设备",
+    emoji: "🔋",
+    description: "导航、拍照和群协作的基础保障。",
+  },
+  clothing: {
+    label: "衣物厚度",
+    emoji: "🧥",
+    description: "按日期、季节和昼夜温差推荐。",
+  },
+  health: {
+    label: "药品护理",
+    emoji: "🩹",
+    description: "长途、步行和饮食变化的兜底项。",
+  },
+  destination: {
+    label: "因地制宜",
+    emoji: "🧭",
+    description: "根据目的地特征补充海边、山路或城市步行物品。",
+  },
+};
+
+const PACKING_SOURCE_LABELS: Record<PackingItem["source"], string> = {
+  essential: "必带",
+  season: "季节",
+  destination: "攻略",
+  custom: "自定",
+};
+
+function getPackingItems(travel: TravelItem) {
+  return travel.packingChecklist.length ? travel.packingChecklist : buildPackingChecklist(travel);
+}
+
+function packingProgress(items: PackingItem[]) {
+  const checked = items.filter((item) => item.checked).length;
+  return { checked, total: items.length };
+}
+
+function clothingSummary(items: PackingItem[]) {
+  const names = items
+    .filter((item) => item.category === "clothing" || item.id === "dest-wind-jacket")
+    .map((item) => item.name)
+    .slice(0, 2);
+  return names.length ? names.join(" + ") : "按季节补充";
+}
+
+function PackingChecklistCenter({
+  travel,
+  onUpdate,
+  onBack,
+}: {
+  travel: TravelItem;
+  onUpdate: (travel: TravelItem) => void;
+  onBack: () => void;
+}) {
+  const [customName, setCustomName] = useState("");
+  const [customCategory, setCustomCategory] = useState<PackingCategory>("destination");
+  const items = getPackingItems(travel);
+  const progress = packingProgress(items);
+  const destination = travel.destination ?? travel.destinationPreference ?? "目的地";
+
+  const replaceItems = (nextItems: PackingItem[]) =>
+    onUpdate({
+      ...travel,
+      packingChecklist: nextItems,
+      updatedAt: new Date().toISOString(),
+    });
+
+  const toggleItem = (id: string) => {
+    replaceItems(
+      items.map((item) => (item.id === id ? { ...item, checked: !item.checked } : item)),
+    );
+  };
+
+  const addCustomItem = () => {
+    const name = customName.trim();
+    if (!name) return;
+    replaceItems([
+      ...items,
+      {
+        id: `packing-custom-${Date.now()}`,
+        name,
+        category: customCategory,
+        reason: "你手动添加的物品。",
+        source: "custom",
+        checked: false,
+        required: false,
+      },
+    ]);
+    setCustomName("");
+  };
+
+  return (
+    <MiniShell title="旅行清单" onBack={onBack} showTabBar={false}>
+      <div className="space-y-4 px-5 pb-8 pt-2">
+        <Card className="relative overflow-hidden bg-brand-soft">
+          <div className="absolute -right-10 -top-14 size-40 rounded-full bg-card/45" />
+          <div className="relative">
+            <Tag tone="accent">出发前工具</Tag>
+            <h2 className="mt-3 text-[22px] font-bold text-foreground">{destination}旅行清单</h2>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              先按常见攻略规则、目的地特征和季节生成；天气、景区限制和航空规则仍建议出发前再确认。
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <div className="rounded-[13px] bg-card/75 p-3">
+                <p className="text-[9px] text-muted-foreground">准备进度</p>
+                <p className="mt-1 text-[18px] font-bold text-foreground">
+                  {progress.checked}/{progress.total}
+                </p>
+              </div>
+              <div className="rounded-[13px] bg-card/75 p-3">
+                <p className="text-[9px] text-muted-foreground">衣物厚度</p>
+                <p className="mt-1 text-[12px] font-bold leading-snug text-foreground">
+                  {clothingSummary(items)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="!p-3">
+          <div className="flex gap-2">
+            <input
+              value={customName}
+              onChange={(event) => setCustomName(event.target.value)}
+              placeholder="补充一个物品"
+              className="min-w-0 flex-1 rounded-[12px] bg-surface-sunk px-3 py-2 text-[12px] outline-none"
+            />
+            <select
+              value={customCategory}
+              onChange={(event) => setCustomCategory(event.target.value as PackingCategory)}
+              className="rounded-[12px] bg-surface-sunk px-2 text-[11px] outline-none"
+              aria-label="物品分类"
+            >
+              {Object.entries(PACKING_CATEGORY_META).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={addCustomItem}
+              className="flex size-9 shrink-0 items-center justify-center rounded-[12px] bg-primary text-primary-foreground"
+              aria-label="添加物品"
+            >
+              <Plus className="size-4" />
+            </button>
+          </div>
+        </Card>
+
+        {(Object.keys(PACKING_CATEGORY_META) as PackingCategory[]).map((category) => {
+          const categoryItems = items.filter((item) => item.category === category);
+          if (!categoryItems.length) return null;
+          const meta = PACKING_CATEGORY_META[category];
+          return (
+            <Card key={category} className="!p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-[13px] bg-brand-soft text-[18px]">
+                  {meta.emoji}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-[13px] font-semibold text-foreground">{meta.label}</p>
+                      <p className="mt-0.5 text-[10px] text-muted-foreground">{meta.description}</p>
+                    </div>
+                    <Tag>
+                      {categoryItems.filter((item) => item.checked).length}/{categoryItems.length}
+                    </Tag>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {categoryItems.map((item) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        onClick={() => toggleItem(item.id)}
+                        className="flex w-full items-start gap-2 rounded-[12px] bg-surface-sunk px-3 py-2 text-left"
+                      >
+                        <span
+                          className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border ${
+                            item.checked
+                              ? "border-accent bg-accent text-accent-foreground"
+                              : "border-border bg-card"
+                          }`}
+                        >
+                          {item.checked && <CheckCircle2 className="size-3" />}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span
+                            className={`block text-[12px] font-semibold ${
+                              item.checked
+                                ? "text-muted-foreground line-through"
+                                : "text-foreground"
+                            }`}
+                          >
+                            {item.name}
+                          </span>
+                          <span className="mt-0.5 block text-[10px] leading-relaxed text-muted-foreground">
+                            {item.reason}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-card/80 px-2 py-0.5 text-[8px] font-semibold text-muted-foreground">
+                          {PACKING_SOURCE_LABELS[item.source]}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </MiniShell>
+  );
 }
 
 function ExpenseLedger({
@@ -1061,12 +1295,14 @@ function DayPlanEditor({
 function TripHeroCard({
   travel,
   onUpdate,
+  onOpenChecklist,
   onOpenAccounting,
   onOpenGroupShare,
   companion,
 }: {
   travel: TravelItem;
   onUpdate: (travel: TravelItem) => void;
+  onOpenChecklist: () => void;
   onOpenAccounting: () => void;
   onOpenGroupShare: () => void;
   companion: CompanionProfile | null;
@@ -1078,6 +1314,8 @@ function TripHeroCard({
   const dateLabel = displayTravelDate(travel.dateText, travel.durationDays);
   const canShare = Boolean(travel.destination) && travel.itinerary.length > 0;
   const totalExpense = travel.expenses.reduce((sum, item) => sum + item.amount, 0);
+  const packingItems = getPackingItems(travel);
+  const packing = packingProgress(packingItems);
 
   const patchTravel = (patch: Partial<TravelItem>) =>
     onUpdate({
@@ -1198,25 +1436,22 @@ function TripHeroCard({
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="rounded-[13px] bg-surface-sunk p-3 text-left">
-            <Wallet className="size-4 text-accent" />
-            <p className="mt-2 text-[9px] text-muted-foreground">旅行预算</p>
-            <div className="mt-0.5 flex items-center gap-1">
-              <span className="text-[12px] font-bold text-foreground">¥</span>
-              <input
-                type="number"
-                min={0}
-                value={travel.budget ?? ""}
-                onChange={(event) =>
-                  patchTravel({
-                    budget: event.target.value ? Number(event.target.value) : null,
-                  })
-                }
-                placeholder="待设置"
-                className="min-w-0 flex-1 bg-transparent text-[12px] font-bold text-foreground outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-          </label>
+          <button
+            type="button"
+            onClick={onOpenChecklist}
+            className="relative rounded-[13px] bg-surface-sunk p-3 text-left"
+          >
+            <ClipboardList className="size-4 text-accent" />
+            <p className="mt-2 text-[9px] text-muted-foreground">旅行清单</p>
+            <p className="mt-0.5 text-[12px] font-bold text-foreground">
+              {packing.checked
+                ? `${packing.checked}/${packing.total} 已准备`
+                : `${packing.total} 项建议`}
+            </p>
+            <p className="mt-1 truncate text-[9px] text-muted-foreground">
+              {clothingSummary(packingItems)}
+            </p>
+          </button>
           <button
             type="button"
             onClick={onOpenAccounting}
@@ -1449,7 +1684,7 @@ function UpcomingView({
         title={
           travel.expenses.length ? `共同账本已有 ${travel.expenses.length} 笔` : "共同账本尚未开始"
         }
-        description="预算旁的“记账”入口可随时记录预订支出、分类消费和 AA 分摊。"
+        description="“记账”入口可随时记录预订支出、分类消费和 AA 分摊。"
       />
       <StatusAction travel={travel} onUpdate={onUpdate} />
     </div>
@@ -1658,6 +1893,7 @@ function createExperienceSample(): TravelItem {
     ],
     expenses: [],
     settlements: [],
+    packingChecklist: [],
     collaboration: null,
     photos: [],
     createdAt: "2026-07-31T00:00:00.000Z",
@@ -2018,7 +2254,7 @@ export function TripsTab({
   startInTrip?: boolean;
 }) {
   const [view, setView] = useState<
-    "home" | "trip" | "create" | "sample" | "share" | "groupShare" | "accounting"
+    "home" | "trip" | "create" | "sample" | "share" | "groupShare" | "accounting" | "checklist"
   >(startInTrip ? "trip" : "home");
   const [sampleTravel, setSampleTravel] = useState<TravelItem>(createExperienceSample);
   const [shareTravelId, setShareTravelId] = useState<string | null>(null);
@@ -2080,6 +2316,16 @@ export function TripsTab({
       <AccountingCenter
         travel={travel}
         onUpdate={(updated) => onUpdateTravel(updated, { action: "更新了共同账本" })}
+        onBack={() => setView("trip")}
+      />
+    );
+  }
+
+  if (view === "checklist" && travel) {
+    return (
+      <PackingChecklistCenter
+        travel={travel}
+        onUpdate={(updated) => onUpdateTravel(updated, { action: "更新了旅行清单" })}
         onBack={() => setView("trip")}
       />
     );
@@ -2284,6 +2530,7 @@ export function TripsTab({
         <TripHeroCard
           travel={travel}
           onUpdate={onUpdateTravel}
+          onOpenChecklist={() => setView("checklist")}
           onOpenAccounting={() => setView("accounting")}
           onOpenGroupShare={() => startGroupShare(travel, "trip")}
           companion={companion}
