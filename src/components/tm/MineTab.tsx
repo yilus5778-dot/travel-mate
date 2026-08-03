@@ -98,7 +98,7 @@ function TravelMap({ travels }: { travels: TravelItem[] }) {
         ))}
       </div>
 
-      <div className="relative h-[350px] overflow-hidden rounded-[24px] bg-accent-soft shadow-[var(--shadow-card)]">
+      <div className="relative h-[350px] overflow-hidden rounded-[24px] bg-accent-soft shadow-[var(--shadow-card)] md:h-[440px]">
         <div className="absolute -left-12 top-6 size-52 rounded-[45%] border-[18px] border-card/65" />
         <div className="absolute -right-12 bottom-8 size-64 rounded-[42%] border-[20px] border-brand-soft/90" />
         <div className="absolute left-[18%] top-[45%] h-1 w-[62%] rotate-[18deg] rounded-full bg-accent/20" />

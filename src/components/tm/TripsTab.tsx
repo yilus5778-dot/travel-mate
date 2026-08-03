@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ClipboardList,
   Clock3,
+  CloudSun,
   Copy,
   ExternalLink,
   ImageUp,
@@ -48,6 +49,8 @@ import { MiniShell, Card, PrimaryButton, Tag, type TabKey } from "./MiniShell";
 import { CreateTrip } from "./CreateTrip";
 import { AccountingCenter } from "./AccountingCenter";
 import { CollaborationCenter } from "./CollaborationCenter";
+import { TripMap, type TripMapDay } from "./TripMap";
+import { isAmapConfigured } from "@/lib/amap-loader";
 
 function valueOrPending(value: string | number | null) {
   return value === null || value === "" ? "待确定" : String(value);
@@ -946,6 +949,57 @@ function openMapSearch(title: string, destination: string | null) {
   window.open(url.toString(), "_blank", "noopener,noreferrer");
 }
 
+type WeatherCast = {
+  date: string;
+  dayWeather: string;
+  dayTemp: number;
+  nightTemp: number;
+};
+
+/** 目的地天气条:调用 /api/weather,最多展示 4 天预报;失败时静默不渲染。 */
+function WeatherStrip({ destination }: { destination: string | null }) {
+  const [casts, setCasts] = useState<WeatherCast[]>([]);
+
+  useEffect(() => {
+    if (!destination?.trim()) {
+      setCasts([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/weather?city=${encodeURIComponent(destination.trim())}`)
+      .then((response) => (response.ok ? response.json() : Promise.reject(response.status)))
+      .then((data: { casts?: WeatherCast[] }) => {
+        if (!cancelled) setCasts((data.casts ?? []).slice(0, 4));
+      })
+      .catch(() => {
+        if (!cancelled) setCasts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [destination]);
+
+  if (!casts.length) return null;
+
+  return (
+    <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5">
+      <CloudSun className="size-3.5 shrink-0 text-accent" />
+      {casts.map((cast) => (
+        <div
+          key={cast.date}
+          className="flex shrink-0 items-center gap-1 rounded-[10px] bg-surface-sunk px-2 py-1.5"
+        >
+          <span className="text-[10px] font-semibold text-foreground">{cast.date.slice(5)}</span>
+          <span className="text-[10px] text-muted-foreground">{cast.dayWeather}</span>
+          <span className="text-[10px] text-muted-foreground">
+            {cast.nightTemp}° ~ {cast.dayTemp}°
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DayPlanEditor({
   travel,
   onPatch,
@@ -1047,6 +1101,19 @@ function DayPlanEditor({
     { left: "70%", top: "24%" },
     { left: "82%", top: "66%" },
   ];
+
+  // 真实地图数据:按天分组行程地点(排除搭子加料与待生成占位)。
+  const mapDestination = travel.destination ?? travel.destinationPreference ?? "";
+  const mapDays: TripMapDay[] = (() => {
+    const grouped = new Map<number, string[]>();
+    for (const item of travel.itinerary) {
+      if (item.companionAccent || item.duration === "待生成" || !item.title.trim()) continue;
+      const day = item.day ?? 1;
+      grouped.set(day, [...(grouped.get(day) ?? []), item.title]);
+    }
+    return [...grouped.entries()].sort(([a], [b]) => a - b).map(([day, stops]) => ({ day, stops }));
+  })();
+  const showRealMap = isAmapConfigured() && mapDestination.trim().length > 0;
 
   return (
     <Card className="overflow-hidden !p-0">
@@ -1299,38 +1366,42 @@ function DayPlanEditor({
             </div>
             <Route className="size-4 text-accent" />
           </div>
-          <div className="relative h-40 overflow-hidden rounded-[18px] bg-accent-soft">
-            <div className="absolute -left-10 top-6 h-16 w-52 rotate-12 rounded-full border-[10px] border-card/75" />
-            <div className="absolute -right-14 bottom-2 h-20 w-56 -rotate-12 rounded-full border-[10px] border-brand-soft" />
-            {routeItems.length > 1 && (
-              <>
-                <div className="absolute left-[15%] top-[39%] h-1 w-[30%] rotate-[24deg] rounded-full bg-accent/35" />
-                <div className="absolute left-[44%] top-[43%] h-1 w-[30%] -rotate-[28deg] rounded-full bg-accent/35" />
-                {routeItems.length > 3 && (
-                  <div className="absolute left-[70%] top-[46%] h-1 w-[18%] rotate-[55deg] rounded-full bg-accent/35" />
-                )}
-              </>
-            )}
-            {routeItems.map((item, index) => (
-              <div
-                key={item.id}
-                className="absolute -translate-x-1/2 -translate-y-1/2"
-                style={routePositions[index]}
-              >
-                <div className="mx-auto flex size-7 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] font-bold text-accent-foreground shadow-sm">
-                  {index + 1}
+          {showRealMap ? (
+            <TripMap destination={mapDestination} days={mapDays} />
+          ) : (
+            <div className="relative h-40 overflow-hidden rounded-[18px] bg-accent-soft">
+              <div className="absolute -left-10 top-6 h-16 w-52 rotate-12 rounded-full border-[10px] border-card/75" />
+              <div className="absolute -right-14 bottom-2 h-20 w-56 -rotate-12 rounded-full border-[10px] border-brand-soft" />
+              {routeItems.length > 1 && (
+                <>
+                  <div className="absolute left-[15%] top-[39%] h-1 w-[30%] rotate-[24deg] rounded-full bg-accent/35" />
+                  <div className="absolute left-[44%] top-[43%] h-1 w-[30%] -rotate-[28deg] rounded-full bg-accent/35" />
+                  {routeItems.length > 3 && (
+                    <div className="absolute left-[70%] top-[46%] h-1 w-[18%] rotate-[55deg] rounded-full bg-accent/35" />
+                  )}
+                </>
+              )}
+              {routeItems.map((item, index) => (
+                <div
+                  key={item.id}
+                  className="absolute -translate-x-1/2 -translate-y-1/2"
+                  style={routePositions[index]}
+                >
+                  <div className="mx-auto flex size-7 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] font-bold text-accent-foreground shadow-sm">
+                    {index + 1}
+                  </div>
+                  <p className="mt-1 max-w-[88px] truncate rounded-full bg-card/90 px-2 py-1 text-[8px] font-medium text-foreground shadow-sm">
+                    {item.title}
+                  </p>
                 </div>
-                <p className="mt-1 max-w-[88px] truncate rounded-full bg-card/90 px-2 py-1 text-[8px] font-medium text-foreground shadow-sm">
-                  {item.title}
-                </p>
-              </div>
-            ))}
-            {!routeItems.length && (
-              <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
-                添加地点后自动形成路线
-              </div>
-            )}
-          </div>
+              ))}
+              {!routeItems.length && (
+                <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                  添加地点后自动形成路线
+                </div>
+              )}
+            </div>
+          )}
           <p className="mt-2 truncate text-[10px] text-muted-foreground">
             {routeItems.length
               ? routeItems.map((item) => item.title).join(" → ")
@@ -1514,6 +1585,8 @@ function TripHeroCard({
             <span className="font-medium text-foreground">天</span>
           </label>
         </div>
+
+        <WeatherStrip destination={travel.destination ?? travel.destinationPreference} />
 
         <div className="mt-2 grid grid-cols-2 gap-2">
           {travel.itinerary.length === 0 && (

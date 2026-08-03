@@ -11,8 +11,8 @@ export function LoginDialog({
   onConfirm: () => void;
 }) {
   return (
-    <div className="absolute inset-0 z-50 flex items-end bg-foreground/40 p-4">
-      <Card className="w-full">
+    <div className="fixed inset-0 z-50 flex items-end bg-foreground/40 p-4 md:items-center md:justify-center">
+      <Card className="w-full md:max-w-md">
         <div className="flex items-center gap-3">
           <div className="flex size-10 items-center justify-center rounded-full bg-brand-soft">
             <LockKeyhole className="size-5 text-foreground/75" />

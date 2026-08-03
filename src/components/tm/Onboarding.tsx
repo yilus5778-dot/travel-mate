@@ -51,7 +51,7 @@ export function Onboarding({
   if (step === "welcome") {
     return (
       <MiniShell title="travelmate" showTabBar={false}>
-        <div className="flex min-h-full flex-col px-6 pb-6 pt-5">
+        <div className="flex min-h-[75dvh] flex-col px-6 pb-6 pt-5">
           <div className="text-center">
             <p className="text-[13px] font-medium tracking-[0.3em] text-muted-foreground">
               travelmate
@@ -102,7 +102,7 @@ export function Onboarding({
         showTabBar={false}
         onBack={() => (index === 0 ? setStep("welcome") : setIndex(index - 1))}
       >
-        <div className="flex min-h-full flex-col px-6 pb-8">
+        <div className="flex min-h-[75dvh] flex-col px-6 pb-8">
           <div className="mt-1 h-1.5 w-full rounded-full bg-surface-sunk">
             <div
               className="h-1.5 rounded-full bg-primary transition-all duration-300"
@@ -152,7 +152,7 @@ export function Onboarding({
   if (step === "loading") {
     return (
       <MiniShell title="正在匹配" showTabBar={false}>
-        <div className="flex h-full flex-col items-center justify-center gap-5 px-8 text-center">
+        <div className="flex min-h-[70dvh] flex-col items-center justify-center gap-5 px-8 text-center">
           <div className="flex size-24 animate-pulse items-center justify-center rounded-full bg-brand-soft text-5xl">
             ✨
           </div>
@@ -237,7 +237,7 @@ export function Onboarding({
   if (companion && result) {
     return (
       <MiniShell title="搭子命名" showTabBar={false} onBack={() => setStep("result")}>
-        <div className="flex min-h-full flex-col px-6 pb-8">
+        <div className="flex min-h-[75dvh] flex-col px-6 pb-8">
           <div className="mt-6 text-center">
             <div className="mx-auto flex size-24 items-center justify-center rounded-full bg-brand-soft text-5xl">
               {companion.emoji}

@@ -60,7 +60,7 @@ export function JoinCollaboration({
   if (checking) {
     return (
       <MiniShell title="协作旅行" showTabBar={false}>
-        <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+        <div className="flex min-h-[70dvh] flex-col items-center justify-center px-8 text-center">
           <div className="flex size-16 animate-pulse items-center justify-center rounded-full bg-brand-soft">
             <Users className="size-6 text-accent" />
           </div>

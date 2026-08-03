@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
@@ -27,11 +27,40 @@ import {
   type TravelDateStatus,
   type TravelItem,
 } from "@/lib/app-model";
+import {
+  fetchAiIntent,
+  fetchAiOrganize,
+  fetchAiPlan,
+  fetchAiRecognition,
+  fetchLinkContent,
+} from "@/lib/ai-client";
 import { MiniShell, Card, PrimaryButton, Tag } from "./MiniShell";
 
 type Step = "input" | "analyzing" | "questions";
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** 图片压缩到最长边 1280px 的 JPEG data URL,控制上传体积和识别成本 */
+function fileToResizedDataUrl(file: File, maxEdge = 1280, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(image.width * scale);
+      canvas.height = Math.round(image.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("图片处理失败"));
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", quality));
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("图片读取失败"));
+    };
+    image.src = url;
+  });
+}
 
 export function CreateTrip({
   onCancel,
@@ -59,6 +88,13 @@ export function CreateTrip({
   const [peopleCount, setPeopleCount] = useState("");
   const [budget, setBudget] = useState("");
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const imageFilesRef = useRef(new Map<string, File>());
+  const recognizedTextsRef = useRef(new Map<string, string>());
+  const sourcesRef = useRef<SourceItem[]>([]);
+
+  useEffect(() => {
+    sourcesRef.current = sources;
+  }, [sources]);
 
   const meaningfulText = isMeaningfulIdea(inputText);
   const recognizedSources = sources.filter((source) => source.status === "recognized");
@@ -116,30 +152,45 @@ export function CreateTrip({
     );
   };
 
+  const updateSource = (id: string, patch: Partial<SourceItem>) => {
+    setSources((current) =>
+      current.map((source) => (source.id === id ? { ...source, ...patch } : source)),
+    );
+  };
+
+  const removeSource = (id: string) => {
+    const next = sourcesRef.current.filter((item) => item.id !== id);
+    sourcesRef.current = next;
+    setSources(next);
+    imageFilesRef.current.delete(id);
+    recognizedTextsRef.current.delete(id);
+  };
+
   const recognizeSources = async (ids: string[]) => {
-    setSources((current) =>
-      current.map((source) =>
-        ids.includes(source.id) && source.status !== "failed"
-          ? { ...source, status: "uploading" }
-          : source,
-      ),
-    );
-    await wait(350);
-    setSources((current) =>
-      current.map((source) =>
-        ids.includes(source.id) && source.status !== "failed"
-          ? { ...source, status: "recognizing" }
-          : source,
-      ),
-    );
-    await wait(650);
-    setSources((current) =>
-      current.map((source) =>
-        ids.includes(source.id) && source.status !== "failed"
-          ? { ...source, status: "recognized" }
-          : source,
-      ),
-    );
+    for (const id of ids) {
+      const source = sourcesRef.current.find((item) => item.id === id);
+      if (!source || source.status === "failed") continue;
+      updateSource(id, { status: "recognizing", error: undefined });
+      try {
+        if (source.kind === "image") {
+          const file = imageFilesRef.current.get(id);
+          if (!file) throw new Error("图片读取失败,请重新上传");
+          const dataUrl = await fileToResizedDataUrl(file);
+          const [text] = await fetchAiRecognition([dataUrl]);
+          if (!text?.trim()) throw new Error("没有从图片里识别到旅行相关文字");
+          recognizedTextsRef.current.set(id, text.trim());
+        } else {
+          const text = await fetchLinkContent(source.name);
+          recognizedTextsRef.current.set(id, text.trim());
+        }
+        updateSource(id, { status: "recognized" });
+      } catch (error) {
+        updateSource(id, {
+          status: "failed",
+          error: error instanceof Error ? error.message : "识别失败,请重试",
+        });
+      }
+    }
   };
 
   const addLink = () => {
@@ -154,6 +205,7 @@ export function CreateTrip({
         status: "selected",
       };
       setSources((current) => [...current, source]);
+      sourcesRef.current = [...sourcesRef.current, source];
       setLink("");
       setLinkError("");
       void recognizeSources([source.id]);
@@ -167,14 +219,23 @@ export function CreateTrip({
     if (!hasInput || recognizingSources.length) return;
 
     setStep("analyzing");
-    setAnalysisLabel("正在判断你的需求…");
-    await wait(500);
-    setAnalysisLabel("正在区分现成行程与规划想法…");
-    await wait(650);
-    setAnalysisLabel("正在整理可执行攻略结构…");
-    await wait(450);
+    setAnalysisLabel("AI 正在理解你的需求…");
 
-    const intent = extractTravelIntent(inputText);
+    const recognizedText = Array.from(recognizedTextsRef.current.values()).join("\n\n");
+    const combinedText = [inputText.trim(), recognizedText].filter(Boolean).join("\n\n");
+
+    // 意图提取:优先 DeepSeek,失败回落本地规则
+    let intent;
+    let aiAvailable = true;
+    try {
+      intent = await fetchAiIntent(combinedText);
+    } catch {
+      aiAvailable = false;
+      intent = { ...extractTravelIntent(inputText), departureCity: null };
+    }
+
+    setAnalysisLabel("正在区分现成行程与规划想法…");
+
     const mode: PlanningMode =
       intent.looksLikeItinerary || (recognizedSources.length > 0 && !meaningfulText)
         ? "organize"
@@ -190,12 +251,29 @@ export function CreateTrip({
     setDateText(intent.dateText ?? "");
     setDurationDays(intent.durationDays ? String(intent.durationDays) : "");
     setPeopleCount(intent.peopleCount ? String(intent.peopleCount) : "");
+    if (intent.departureCity) setDepartureCity(intent.departureCity);
 
     if (mode === "organize") {
-      const organized = organizePastedItinerary(inputText);
+      setAnalysisLabel("正在整理可执行攻略结构…");
+      let organized: ItineraryItem[] = [];
+      let organizedDestination: string | null = null;
+      if (aiAvailable) {
+        try {
+          const result = await fetchAiOrganize(combinedText);
+          organized = result.items;
+          organizedDestination = result.destination;
+        } catch {
+          organized = [];
+        }
+      }
+      if (!organized.length) {
+        organized = organizePastedItinerary(combinedText);
+      }
+      const resolvedDestination =
+        intent.destination ?? organizedDestination ?? candidates[0] ?? "";
       createDraftFromPlan({
         mode,
-        destinationValue: intent.destination ?? candidates[0] ?? "",
+        destinationValue: resolvedDestination,
         destinationPreferenceValue: intent.destinationPreference ?? "",
         destinationCandidatesValue: candidates,
         dateStatusValue: intent.dateStatus,
@@ -205,7 +283,7 @@ export function CreateTrip({
         itineraryValue: organized,
         aiSummaryValue: organized.length
           ? `我识别到这是一份现成行程，已按顺序整理出 ${organized.length} 项内容。原文之外的信息不会自动补写。`
-          : "我识别到你正在导入现成资料。当前原型已完成上传/链接读取状态，但不会只凭图片文件名或网页 URL 编造行程；识别出明确文字后才会进入攻略。",
+          : "这份资料里没有整理出明确的行程条目，已保留原始信息，你可以在行程页手动补充。",
       });
       return;
     }
@@ -213,9 +291,41 @@ export function CreateTrip({
     setStep("questions");
   };
 
-  const generatePlan = () => {
+  const generatePlan = async () => {
     const selectedDestination = destination.trim() || null;
     const days = durationDays ? Number(durationDays) : 3;
+
+    // 有明确目的地时优先用 DeepSeek 生成,失败再回落本地模板
+    if (selectedDestination) {
+      setStep("analyzing");
+      setAnalysisLabel(`AI 正在生成「${selectedDestination}」的 ${days} 日行程…`);
+      try {
+        const result = await fetchAiPlan({
+          destination: selectedDestination,
+          durationDays: days,
+          peopleCount: peopleCount ? Number(peopleCount) : null,
+          budget: budget ? Number(budget) : null,
+          departureCity: departureCity.trim() || null,
+          dateText: dateText.trim() || null,
+          destinationPreference: destinationPreference.trim() || null,
+        });
+        if (result.items.length) {
+          createDraftFromPlan({
+            mode: "plan",
+            durationDaysValue: days,
+            peopleCountValue: peopleCount ? Number(peopleCount) : null,
+            itineraryValue: result.items,
+            aiPlanStatusValue: "generated",
+            aiSummaryValue: `AI 已生成「${selectedDestination}」${days} 天行程草案,每天的时间、地点和推荐理由都可以在行程规划页继续调整。`,
+          });
+          return;
+        }
+      } catch {
+        // 落入下方本地模板兜底
+      }
+      setStep("questions");
+    }
+
     const quality = getItineraryPlanningQuality(selectedDestination, days);
     const generated = buildSuggestedItinerary(selectedDestination, days, companion?.key);
     createDraftFromPlan({
@@ -283,16 +393,21 @@ export function CreateTrip({
                 accept="image/*"
                 className="hidden"
                 onChange={(event) => {
-                  const next: SourceItem[] = Array.from(event.target.files ?? []).map(
-                    (file, index) => ({
-                      id: `image-${Date.now()}-${index}-${file.name}`,
-                      kind: "image",
+                  const files = Array.from(event.target.files ?? []);
+                  const next: SourceItem[] = files.map((file, index) => {
+                    const id = `image-${Date.now()}-${index}-${file.name}`;
+                    const isImage = file.type.startsWith("image/");
+                    if (isImage) imageFilesRef.current.set(id, file);
+                    return {
+                      id,
+                      kind: "image" as const,
                       name: file.name,
-                      status: file.type.startsWith("image/") ? "selected" : "failed",
-                      error: file.type.startsWith("image/") ? undefined : "请选择图片格式",
-                    }),
-                  );
+                      status: isImage ? "selected" : "failed",
+                      error: isImage ? undefined : "请选择图片格式",
+                    };
+                  });
                   setSources((current) => [...current, ...next]);
+                  sourcesRef.current = [...sourcesRef.current, ...next];
                   void recognizeSources(
                     next.filter((source) => source.status !== "failed").map((source) => source.id),
                   );
@@ -343,9 +458,7 @@ export function CreateTrip({
                       </div>
                       <button
                         aria-label={`删除 ${source.name}`}
-                        onClick={() =>
-                          setSources((current) => current.filter((item) => item.id !== source.id))
-                        }
+                        onClick={() => removeSource(source.id)}
                       >
                         <Trash2 className="size-4 text-muted-foreground" />
                       </button>

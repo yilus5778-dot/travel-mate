@@ -2,23 +2,19 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { getCollabDb, type CollabDb } from "./server/db";
+import {
+  aiExtractIntent,
+  aiOrganizeItinerary,
+  aiPlanItinerary,
+  aiRecognizeImages,
+  fetchLinkText,
+} from "./server/ai";
+import { fetchWeatherForecast } from "./server/weather";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
-
-type D1Result = { meta?: { changes?: number } };
-type D1Statement = {
-  bind: (...values: unknown[]) => D1Statement;
-  first: <T = Record<string, unknown>>() => Promise<T | null>;
-  all: <T = Record<string, unknown>>() => Promise<{ results: T[] }>;
-  run: () => Promise<D1Result>;
-};
-type D1Binding = {
-  prepare: (sql: string) => D1Statement;
-  batch: (statements: D1Statement[]) => Promise<D1Result[]>;
-};
-type RuntimeEnv = { DB?: D1Binding };
 
 type SharedTripRow = {
   id: string;
@@ -66,7 +62,7 @@ async function hashToken(value: string) {
   return Array.from(new Uint8Array(digest), (item) => item.toString(16).padStart(2, "0")).join("");
 }
 
-async function ensureCollaborationSchema(db: D1Binding) {
+async function ensureCollaborationSchema(db: CollabDb) {
   if (!schemaPromise) {
     schemaPromise = db
       .batch([
@@ -112,10 +108,12 @@ async function ensureCollaborationSchema(db: D1Binding) {
   await schemaPromise;
 }
 
-function getDb(env: unknown) {
-  const db = (env as RuntimeEnv | undefined)?.DB;
-  if (!db) throw new Error("协作数据库尚未连接，请稍后重试");
-  return db;
+async function getDb(env: unknown): Promise<CollabDb> {
+  try {
+    return await getCollabDb(env);
+  } catch {
+    throw new Error("协作数据库尚未连接，请稍后重试");
+  }
 }
 
 function cleanTravel(value: unknown) {
@@ -127,7 +125,7 @@ function cleanTravel(value: unknown) {
   return travel;
 }
 
-async function getMember(db: D1Binding, tripId: string, request: Request) {
+async function getMember(db: CollabDb, tripId: string, request: Request) {
   const memberKey = request.headers.get("x-travelmate-member-key")?.trim();
   if (!memberKey) return null;
   const keyHash = await hashToken(memberKey);
@@ -139,7 +137,7 @@ async function getMember(db: D1Binding, tripId: string, request: Request) {
     .first<MemberRow>();
 }
 
-async function appendEvent(db: D1Binding, tripId: string, actorName: string, action: string) {
+async function appendEvent(db: CollabDb, tripId: string, actorName: string, action: string) {
   await db
     .prepare(
       "INSERT INTO collaboration_events (id, trip_id, actor_name, action, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -154,7 +152,7 @@ async function appendEvent(db: D1Binding, tripId: string, actorName: string, act
     .run();
 }
 
-async function buildSharedTravel(db: D1Binding, trip: SharedTripRow, member: MemberRow) {
+async function buildSharedTravel(db: CollabDb, trip: SharedTripRow, member: MemberRow) {
   const members = await db
     .prepare(
       "SELECT id, name, role, joined_at FROM collaboration_members WHERE trip_id = ? ORDER BY joined_at ASC",
@@ -193,7 +191,7 @@ async function buildSharedTravel(db: D1Binding, trip: SharedTripRow, member: Mem
   };
 }
 
-async function getSharedTrip(db: D1Binding, tripId: string) {
+async function getSharedTrip(db: CollabDb, tripId: string) {
   return db
     .prepare(
       "SELECT id, invite_code, invite_role, travel_json, revision, updated_at FROM shared_trips WHERE id = ? LIMIT 1",
@@ -207,7 +205,7 @@ async function handleCollaborationApi(request: Request, env: unknown) {
   if (!url.pathname.startsWith("/api/collaboration/")) return null;
 
   try {
-    const db = getDb(env);
+    const db = await getDb(env);
     await ensureCollaborationSchema(db);
 
     if (url.pathname === "/api/collaboration/create" && request.method === "POST") {
@@ -413,6 +411,95 @@ async function handleCollaborationApi(request: Request, env: unknown) {
   }
 }
 
+async function handleAiApi(request: Request) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/api/ai/")) return null;
+  if (request.method !== "POST") return json({ error: "只支持 POST 请求" }, { status: 405 });
+
+  try {
+    const body = (await request.json()) as Record<string, unknown>;
+
+    if (url.pathname === "/api/ai/intent") {
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) return json({ error: "缺少要分析的文字" }, { status: 400 });
+      if (text.length > 8000) return json({ error: "文字内容过长" }, { status: 400 });
+      return json({ intent: await aiExtractIntent(text) });
+    }
+
+    if (url.pathname === "/api/ai/organize") {
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) return json({ error: "缺少要整理的攻略内容" }, { status: 400 });
+      if (text.length > 12000) return json({ error: "攻略内容过长" }, { status: 400 });
+      return json(await aiOrganizeItinerary(text));
+    }
+
+    if (url.pathname === "/api/ai/plan") {
+      const destination = typeof body.destination === "string" ? body.destination.trim() : "";
+      const durationDays = Number(body.durationDays);
+      if (!destination || !Number.isInteger(durationDays) || durationDays < 1 || durationDays > 14) {
+        return json({ error: "需要明确的目的地和 1-14 天的行程天数" }, { status: 400 });
+      }
+      return json(
+        await aiPlanItinerary({
+          destination,
+          durationDays,
+          peopleCount: typeof body.peopleCount === "number" ? body.peopleCount : null,
+          budget: typeof body.budget === "number" ? body.budget : null,
+          departureCity: typeof body.departureCity === "string" ? body.departureCity : null,
+          dateText: typeof body.dateText === "string" ? body.dateText : null,
+          destinationPreference:
+            typeof body.destinationPreference === "string" ? body.destinationPreference : null,
+        }),
+      );
+    }
+
+    if (url.pathname === "/api/ai/recognize") {
+      const images = Array.isArray(body.images) ? body.images : [];
+      const valid = images.filter(
+        (item): item is string =>
+          typeof item === "string" &&
+          item.startsWith("data:image/") &&
+          item.length < 6_000_000,
+      );
+      if (!valid.length) {
+        return json({ error: "没有可识别的图片(仅支持 data:image/ 格式,单张 4MB 内)" }, { status: 400 });
+      }
+      return json({ texts: await aiRecognizeImages(valid.slice(0, 4)) });
+    }
+
+    if (url.pathname === "/api/ai/fetch-link") {
+      const link = typeof body.url === "string" ? body.url.trim() : "";
+      if (!link) return json({ error: "缺少链接" }, { status: 400 });
+      return json({ text: await fetchLinkText(link) });
+    }
+
+    return json({ error: "AI 接口不存在" }, { status: 404 });
+  } catch (error) {
+    console.error(error);
+    return json(
+      { error: error instanceof Error ? error.message : "AI 服务暂时不可用" },
+      { status: 500 },
+    );
+  }
+}
+
+async function handleWeatherApi(request: Request) {
+  const url = new URL(request.url);
+  if (url.pathname !== "/api/weather") return null;
+
+  try {
+    const city = url.searchParams.get("city")?.trim();
+    if (!city) return json({ error: "缺少 city 参数" }, { status: 400 });
+    return json(await fetchWeatherForecast(city));
+  } catch (error) {
+    console.error(error);
+    return json(
+      { error: error instanceof Error ? error.message : "天气服务暂时不可用" },
+      { status: 500 },
+    );
+  }
+}
+
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
@@ -474,6 +561,10 @@ export default {
     try {
       const collaborationResponse = await handleCollaborationApi(request, env);
       if (collaborationResponse) return collaborationResponse;
+      const aiResponse = await handleAiApi(request);
+      if (aiResponse) return aiResponse;
+      const weatherResponse = await handleWeatherApi(request);
+      if (weatherResponse) return weatherResponse;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(response);

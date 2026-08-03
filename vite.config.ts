@@ -16,6 +16,11 @@ export default defineConfig({
       },
     },
   },
+  // 部署目标:默认构建 Node 服务(自有服务器);Lovable 构建时会被平台强制为 Cloudflare,
+  // 本地需要 Cloudflare 产物时可显式 DEPLOY_TARGET=cloudflare。
+  nitro: {
+    preset: process.env.DEPLOY_TARGET === "cloudflare" ? "cloudflare-module" : "node-server",
+  },
   tanstackStart: {
     router: {
       autoCodeSplitting: false,

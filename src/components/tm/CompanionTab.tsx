@@ -179,8 +179,8 @@ export function CompanionTab({
       </div>
 
       {showMemoryChoice && (
-        <div className="absolute inset-0 z-30 flex items-end bg-foreground/35 p-4">
-          <Card className="w-full">
+        <div className="fixed inset-0 z-30 flex items-end bg-foreground/35 p-4 md:items-center md:justify-center">
+          <Card className="w-full md:max-w-md">
             <h3 className="text-[16px] font-bold text-foreground">关闭搭子记忆</h3>
             <p className="mt-2 text-[12px] leading-relaxed text-muted-foreground">
               你可以只停止使用并保留已有记忆，也可以同时删除全部记忆。

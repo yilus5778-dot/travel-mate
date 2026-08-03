@@ -1,9 +1,17 @@
 import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
 const output = join(root, ".output");
 const dist = join(root, "dist");
+
+// 只有 Cloudflare 目标(带 wrangler.json)才需要这个打包后处理;
+// Node 自有服务器部署直接用 .output,无需 staging。
+if (!existsSync(join(output, "server", "wrangler.json"))) {
+  console.log("[stage-sites-build] 非 Cloudflare 构建,跳过 staging(使用 .output 直接部署)");
+  process.exit(0);
+}
 
 await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });

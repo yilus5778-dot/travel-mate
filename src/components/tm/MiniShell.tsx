@@ -3,6 +3,18 @@ import { ChevronLeft, Map, PawPrint, Receipt, User } from "lucide-react";
 
 export type TabKey = "trips" | "accounting" | "companion" | "mine";
 
+const TABS = [
+  { key: "trips", label: "旅程", Icon: Map },
+  { key: "accounting", label: "记账", Icon: Receipt },
+  { key: "companion", label: "搭子", Icon: PawPrint },
+  { key: "mine", label: "我的", Icon: User },
+] as const;
+
+/**
+ * 响应式应用外壳:
+ * - 手机端:顶部标题栏 + 底部 Tab 导航(类小程序体验)
+ * - 桌面端(md 及以上):顶部 Logo + 居中导航,内容限宽居中
+ */
 export function MiniShell({
   title,
   onBack,
@@ -18,52 +30,85 @@ export function MiniShell({
   showTabBar?: boolean;
   children: ReactNode;
 }) {
+  const showTabs = Boolean(showTabBar && tab && onTabChange);
+
   return (
-    <div className="mini-shell relative mx-auto flex h-[812px] w-[375px] flex-col overflow-hidden rounded-[2.75rem] border-8 border-foreground/85 bg-background shadow-[var(--shadow-float)]">
-      {/* 状态栏 + 胶囊 */}
-      <div className="shrink-0 bg-background">
-        <div className="flex items-center justify-between px-6 pt-3 text-[11px] font-medium text-foreground">
-          <span>9:41</span>
-          <span className="tracking-tight">●●● ᯤ ▮</span>
-        </div>
-        <div className="relative flex h-11 items-center justify-center">
-          {onBack && (
-            <button
-              onClick={onBack}
-              aria-label="返回"
-              className="absolute left-3 flex size-8 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-secondary"
-            >
-              <ChevronLeft className="size-5" />
-            </button>
+    <div className="flex min-h-dvh flex-col bg-background text-foreground">
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
+        <div className="relative mx-auto flex h-14 w-full max-w-4xl items-center px-2 md:px-6">
+          {onBack ? (
+            <>
+              <button
+                onClick={onBack}
+                aria-label="返回"
+                className="flex size-9 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-secondary"
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+              <span className="ml-1 hidden text-[15px] font-semibold md:inline">{title}</span>
+              <span className="absolute left-1/2 -translate-x-1/2 text-[15px] font-semibold md:hidden">
+                {title}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="px-2 text-[16px] font-bold text-primary">travelmate</span>
+              <span className="absolute left-1/2 -translate-x-1/2 text-[15px] font-semibold md:hidden">
+                {title}
+              </span>
+            </>
           )}
-          <span className="text-[15px] font-semibold text-foreground">{title}</span>
-          <div className="absolute right-3 flex h-7 w-[74px] items-center justify-center gap-3 rounded-full border border-border bg-secondary/70 text-[10px] text-muted-foreground">
-            <span>•••</span>
-            <span className="h-3 w-px bg-border" />
-            <span>◎</span>
-          </div>
+
+          {showTabs && !onBack && (
+            <nav aria-label="主导航" className="absolute left-1/2 hidden -translate-x-1/2 md:block">
+              <ul className="flex items-center gap-1">
+                {TABS.map(({ key, label, Icon }) => (
+                  <li key={key}>
+                    <button
+                      type="button"
+                      onClick={() => onTabChange?.(key)}
+                      aria-current={tab === key ? "page" : undefined}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-medium transition-colors ${
+                        tab === key
+                          ? "bg-secondary text-foreground"
+                          : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                      }`}
+                    >
+                      <Icon
+                        className={`size-4 ${tab === key ? "text-primary" : ""}`}
+                        strokeWidth={tab === key ? 2.4 : 1.8}
+                      />
+                      {label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          )}
         </div>
-      </div>
+      </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
+      <main
+        className={`mx-auto w-full max-w-4xl flex-1 px-4 py-4 md:px-6 md:py-8 ${
+          showTabs ? "pb-24 md:pb-8" : ""
+        }`}
+      >
+        {children}
+      </main>
 
-      {showTabBar && tab && onTabChange && (
-        <nav className="shrink-0 border-t border-border bg-card/95 pb-4 pt-2 backdrop-blur">
-          <ul className="flex">
-            {(
-              [
-                { key: "trips", label: "旅程", Icon: Map },
-                { key: "accounting", label: "记账", Icon: Receipt },
-                { key: "companion", label: "搭子", Icon: PawPrint },
-                { key: "mine", label: "我的", Icon: User },
-              ] as const
-            ).map(({ key, label, Icon }) => (
+      {showTabs && (
+        <nav
+          aria-label="主导航"
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur md:hidden"
+        >
+          <ul className="flex pb-[env(safe-area-inset-bottom)]">
+            {TABS.map(({ key, label, Icon }) => (
               <li key={key} className="flex-1">
                 <button
                   type="button"
-                  onClick={() => onTabChange(key)}
+                  onClick={() => onTabChange?.(key)}
                   aria-current={tab === key ? "page" : undefined}
-                  className={`flex w-full flex-col items-center gap-1 py-1 text-[11px] transition-colors ${
+                  className={`flex w-full flex-col items-center gap-1 py-2 text-[11px] transition-colors ${
                     tab === key ? "text-foreground" : "text-muted-foreground"
                   }`}
                 >

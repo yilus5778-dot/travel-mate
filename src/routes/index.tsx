@@ -24,12 +24,12 @@ const EXPERIENCE_MODE = true;
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "travelmate · 微信小程序原型" },
+      { title: "travelmate · AI 旅行搭子" },
       {
         name: "description",
-        content: "travelmate AI 旅行规划原型：统一多模态输入、主动追问、可编辑行程和可靠状态。",
+        content: "travelmate AI 旅行搭子：统一多模态输入、主动追问、可编辑行程、协作记账和可靠状态。",
       },
-      { property: "og:title", content: "travelmate · 微信小程序原型" },
+      { property: "og:title", content: "travelmate · AI 旅行搭子" },
       {
         property: "og:description",
         content: "用户随便说、随便传，AI 主动整理并交付可编辑旅行方案。",
@@ -57,12 +57,6 @@ function Index() {
   useEffect(() => {
     const incomingInvite = new URL(window.location.href).searchParams.get("invite");
     setInviteCode(incomingInvite?.trim().toUpperCase() || null);
-    if (EXPERIENCE_MODE) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      setState(EMPTY_STATE);
-      setHydrated(true);
-      return;
-    }
 
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -127,7 +121,7 @@ function Index() {
   }, [hydrated, state.travels]);
 
   useEffect(() => {
-    if (!hydrated || EXPERIENCE_MODE) return;
+    if (!hydrated) return;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [hydrated, state]);
 
@@ -278,11 +272,11 @@ function Index() {
 
   const content = !hydrated ? (
     <MiniShell title="travelmate" showTabBar={false}>
-      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+      <div className="flex min-h-[70dvh] flex-col items-center justify-center px-8 text-center">
         <div className="flex size-16 animate-pulse items-center justify-center rounded-full bg-brand-soft text-2xl">
           🧳
         </div>
-        <p className="mt-4 text-[13px] text-muted-foreground">正在开始一段全新体验…</p>
+        <p className="mt-4 text-[13px] text-muted-foreground">正在加载…</p>
       </div>
     </MiniShell>
   ) : inviteCode ? (
@@ -375,34 +369,24 @@ function Index() {
   );
 
   return (
-    <main className="prototype-stage flex min-h-screen items-center justify-center bg-surface-sunk px-4 py-8">
-      <div className="prototype-wrap flex flex-col items-center gap-5">
-        <header className="prototype-caption text-center">
-          <h1 className="text-[20px] font-bold text-foreground">travelmate</h1>
-          <p className="mt-1 text-[12px] text-muted-foreground">
-            全新体验模式 · 每次打开都从欢迎页开始
-          </p>
-        </header>
-        <div className="relative">
-          {content}
-          {loginReason && (
-            <LoginDialog
-              reason={loginReason}
-              onCancel={() => {
-                setLoginReason(null);
-                setPendingCompanion(null);
-                pendingLoginActionRef.current = null;
-              }}
-              onConfirm={handleLoginConfirm}
-            />
-          )}
-          {syncNotice && (
-            <div className="pointer-events-none absolute bottom-20 left-1/2 z-50 w-[82%] -translate-x-1/2 rounded-[13px] bg-foreground/90 px-4 py-2.5 text-center text-[10px] text-background shadow-lg">
-              {syncNotice}
-            </div>
-          )}
+    <div className="relative min-h-dvh bg-background">
+      {content}
+      {loginReason && (
+        <LoginDialog
+          reason={loginReason}
+          onCancel={() => {
+            setLoginReason(null);
+            setPendingCompanion(null);
+            pendingLoginActionRef.current = null;
+          }}
+          onConfirm={handleLoginConfirm}
+        />
+      )}
+      {syncNotice && (
+        <div className="pointer-events-none fixed bottom-20 left-1/2 z-50 w-[82%] max-w-sm -translate-x-1/2 rounded-[13px] bg-foreground/90 px-4 py-2.5 text-center text-[10px] text-background shadow-lg">
+          {syncNotice}
         </div>
-      </div>
-    </main>
+      )}
+    </div>
   );
 }

@@ -8,6 +8,7 @@
     "build": "vite build && node scripts/stage-sites-build.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "start": "node --env-file=.env .output/server/index.mjs",
     "lint": "eslint .",
     "validate:product": "node scripts/validate-product-model.mjs",
     "format": "prettier --write ."
