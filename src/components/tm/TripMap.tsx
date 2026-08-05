@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MapPin } from "lucide-react";
 import { isAmapConfigured, loadAmap, type AMapMapInstance } from "@/lib/amap-loader";
+import { cleanPoiKeyword } from "@/lib/poi-photos";
 
 export type TripMapDay = { day: number; stops: string[] };
 
@@ -83,8 +84,9 @@ export function TripMap({
     const parsedDays = JSON.parse(daysKey) as TripMapDay[];
     const stops = parsedDays.flatMap((dayPlan) =>
       dayPlan.stops
-        .filter((title) => title.trim())
-        .map((title, index) => ({ title, day: dayPlan.day, seq: index + 1 })),
+        .map((title) => ({ keyword: cleanPoiKeyword(title), title, day: dayPlan.day }))
+        .filter((stop) => stop.keyword)
+        .map((stop, index) => ({ ...stop, seq: index + 1 })),
     );
     if (!stops.length) {
       setLocatedCount(0);
@@ -105,7 +107,7 @@ export function TripMap({
         const geocode = (stop: (typeof stops)[number]) =>
           new Promise<LocatedStop | null>((resolve) => {
             try {
-              placeSearch.search(stop.title, (status, result) => {
+              placeSearch.search(stop.keyword, (status, result) => {
                 const location =
                   status === "complete" ? result?.poiList?.pois?.[0]?.location : null;
                 resolve(location ? { ...stop, lng: location.lng, lat: location.lat } : null);

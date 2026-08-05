@@ -105,6 +105,103 @@ const intentSchema = z.object({
 
 export type AiIntent = z.infer<typeof intentSchema>;
 
+const provinceResolveSchema = z.object({
+  province: z.string().trim().min(1).nullable().catch(null),
+});
+
+const PROVINCE_CANONICAL_NAMES = [
+  "北京市",
+  "天津市",
+  "河北省",
+  "山西省",
+  "内蒙古自治区",
+  "辽宁省",
+  "吉林省",
+  "黑龙江省",
+  "上海市",
+  "江苏省",
+  "浙江省",
+  "安徽省",
+  "福建省",
+  "江西省",
+  "山东省",
+  "河南省",
+  "湖北省",
+  "湖南省",
+  "广东省",
+  "广西壮族自治区",
+  "海南省",
+  "重庆市",
+  "四川省",
+  "贵州省",
+  "云南省",
+  "西藏自治区",
+  "陕西省",
+  "甘肃省",
+  "青海省",
+  "宁夏回族自治区",
+  "新疆维吾尔自治区",
+  "台湾省",
+  "香港特别行政区",
+  "澳门特别行政区",
+] as const;
+
+const PROVINCE_AI_ALIAS: Record<string, string> = {
+  北京: "北京市",
+  天津: "天津市",
+  上海: "上海市",
+  重庆: "重庆市",
+  内蒙古: "内蒙古自治区",
+  广西: "广西壮族自治区",
+  西藏: "西藏自治区",
+  宁夏: "宁夏回族自治区",
+  新疆: "新疆维吾尔自治区",
+  香港: "香港特别行政区",
+  澳门: "澳门特别行政区",
+};
+
+function normalizeProvinceByAi(value: string | null): string | null {
+  if (!value) return null;
+  const text = value.trim();
+  if (!text) return null;
+  if ((PROVINCE_CANONICAL_NAMES as readonly string[]).includes(text)) return text;
+  if (PROVINCE_AI_ALIAS[text]) return PROVINCE_AI_ALIAS[text];
+  for (const province of PROVINCE_CANONICAL_NAMES) {
+    if (text.includes(province)) return province;
+    const short = province
+      .replace("特别行政区", "")
+      .replace("维吾尔自治区", "")
+      .replace("壮族自治区", "")
+      .replace("回族自治区", "")
+      .replace("自治区", "")
+      .replace("省", "")
+      .replace("市", "");
+    if (short && text.includes(short)) return province;
+  }
+  return null;
+}
+
+export async function aiResolveProvince(placeText: string): Promise<string | null> {
+  const query = placeText.trim();
+  if (!query) return null;
+
+  const raw = await chatCompletion(textProvider(), [
+    {
+      role: "system",
+      content: `你是中国地名归属判定器。任务:根据输入地名(城市/县区/景区/模糊描述)判断其所属省级行政区。
+只输出 JSON: {"province":"..."}。
+要求:
+- province 必须是标准省级名称(如"浙江省""北京市""广西壮族自治区")
+- 如果无法可靠判断,返回 {"province": null}
+- 不要输出解释文字`,
+    },
+    { role: "user", content: query.slice(0, 200) },
+  ]);
+
+  const parsed = parseJsonOutput(raw, provinceResolveSchema);
+  return normalizeProvinceByAi(parsed.province);
+}
+
 export async function aiExtractIntent(text: string): Promise<AiIntent> {
   const today = new Date().toISOString().slice(0, 10);
   const raw = await chatCompletion(textProvider(), [
@@ -202,7 +299,12 @@ export async function aiPlanItinerary(input: {
 }
 
 const recognitionSchema = z.object({
-  text: z.string().trim(),
+  // 模型偶尔把提取结果包成对象而不是字符串,统一转成文本
+  text: z
+    .any()
+    .transform((value) =>
+      typeof value === "string" ? value.trim() : JSON.stringify(value, null, 2),
+    ),
 });
 
 export async function aiRecognizeImages(imageDataUrls: string[]): Promise<string[]> {
@@ -224,8 +326,13 @@ export async function aiRecognizeImages(imageDataUrls: string[]): Promise<string
     // GLM-4V-Flash 的 max_tokens 上限为 1024
     { maxTokens: 1024 },
     );
-    const parsed = parseJsonOutput(raw, recognitionSchema);
-    results.push(parsed.text);
+    // 模型可能直接输出纯文本(没有 JSON 包装),此时原文就是提取结果
+    try {
+      const parsed = parseJsonOutput(raw, recognitionSchema);
+      results.push(parsed.text);
+    } catch {
+      results.push(raw.replace(/```(?:json)?|```/g, "").trim());
+    }
   }
   return results;
 }

@@ -10,7 +10,9 @@ import {
   aiRecognizeImages,
   fetchLinkText,
 } from "./server/ai";
+import { resolveProvinceByStrategy } from "./server/location";
 import { fetchWeatherForecast } from "./server/weather";
+import { checkRateLimit, clientIp } from "./server/rate-limit";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -205,6 +207,21 @@ async function handleCollaborationApi(request: Request, env: unknown) {
   if (!url.pathname.startsWith("/api/collaboration/")) return null;
 
   try {
+    // 创建/加入接口按 IP 限流(每小时 30 次),防邀请码爆破
+    if (
+      request.method === "POST" &&
+      (url.pathname === "/api/collaboration/create" || url.pathname === "/api/collaboration/join")
+    ) {
+      const limit = checkRateLimit({
+        key: `collab:h:${clientIp(request)}`,
+        limit: 30,
+        windowMs: 3_600_000,
+      });
+      if (!limit.allowed) {
+        return json({ error: "操作太频繁了，请稍后再试" }, { status: 429 });
+      }
+    }
+
     const db = await getDb(env);
     await ensureCollaborationSchema(db);
 
@@ -416,6 +433,22 @@ async function handleAiApi(request: Request) {
   if (!url.pathname.startsWith("/api/ai/")) return null;
   if (request.method !== "POST") return json({ error: "只支持 POST 请求" }, { status: 405 });
 
+  // 限流:每分钟 10 次、每天 200 次(按 IP),保护模型余额
+  const ip = clientIp(request);
+  const perMinute = checkRateLimit({ key: `ai:m:${ip}`, limit: 10, windowMs: 60_000 });
+  const perDay = checkRateLimit({ key: `ai:d:${ip}`, limit: 200, windowMs: 86_400_000 });
+  if (!perMinute.allowed || !perDay.allowed) {
+    return json(
+      { error: "请求太频繁了，请稍后再试" },
+      {
+        status: 429,
+        headers: {
+          "retry-after": String(Math.max(perMinute.retryAfterSeconds, perDay.retryAfterSeconds)),
+        },
+      },
+    );
+  }
+
   try {
     const body = (await request.json()) as Record<string, unknown>;
 
@@ -500,6 +533,54 @@ async function handleWeatherApi(request: Request) {
   }
 }
 
+async function handleLocationApi(request: Request) {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/api/location/")) return null;
+  if (request.method !== "POST") return json({ error: "只支持 POST 请求" }, { status: 405 });
+
+  const limit = checkRateLimit({
+    key: `location:m:${clientIp(request)}`,
+    limit: 60,
+    windowMs: 60_000,
+  });
+  if (!limit.allowed) {
+    return json(
+      { error: "请求太频繁了，请稍后再试" },
+      {
+        status: 429,
+        headers: { "retry-after": String(limit.retryAfterSeconds) },
+      },
+    );
+  }
+
+  try {
+    const body = (await request.json()) as {
+      text?: unknown;
+      enableSemanticFallback?: unknown;
+    };
+
+    if (url.pathname === "/api/location/resolve") {
+      const text = typeof body.text === "string" ? body.text.trim() : "";
+      if (!text) return json({ error: "缺少 text 参数" }, { status: 400 });
+      if (text.length > 200) return json({ error: "text 过长" }, { status: 400 });
+
+      const result = await resolveProvinceByStrategy({
+        placeText: text,
+        enableSemanticFallback: body.enableSemanticFallback === true,
+      });
+      return json(result);
+    }
+
+    return json({ error: "地名接口不存在" }, { status: 404 });
+  } catch (error) {
+    console.error(error);
+    return json(
+      { error: error instanceof Error ? error.message : "地名服务暂时不可用" },
+      { status: 500 },
+    );
+  }
+}
+
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
@@ -565,6 +646,8 @@ export default {
       if (aiResponse) return aiResponse;
       const weatherResponse = await handleWeatherApi(request);
       if (weatherResponse) return weatherResponse;
+      const locationResponse = await handleLocationApi(request);
+      if (locationResponse) return locationResponse;
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       const normalizedResponse = await normalizeCatastrophicSsrResponse(response);

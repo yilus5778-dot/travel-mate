@@ -5,7 +5,6 @@ import { TripsTab } from "@/components/tm/TripsTab";
 import { AccountingTab } from "@/components/tm/AccountingTab";
 import { CompanionTab } from "@/components/tm/CompanionTab";
 import { MineTab } from "@/components/tm/MineTab";
-import { LoginDialog } from "@/components/tm/LoginDialog";
 import { JoinCollaboration } from "@/components/tm/JoinCollaboration";
 import { MiniShell } from "@/components/tm/MiniShell";
 import { loadCollaboration, syncCollaboration } from "@/lib/collaboration-client";
@@ -44,12 +43,9 @@ export const Route = createFileRoute("/")({
 function Index() {
   const [state, setState] = useState<TravelmateState>(EMPTY_STATE);
   const [hydrated, setHydrated] = useState(false);
-  const [loginReason, setLoginReason] = useState<string | null>(null);
-  const [pendingCompanion, setPendingCompanion] = useState<OnboardingResult | null>(null);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [joinedInviteTravelId, setJoinedInviteTravelId] = useState<string | null>(null);
   const [syncNotice, setSyncNotice] = useState("");
-  const pendingLoginActionRef = useRef<(() => void) | null>(null);
   const latestTravelRef = useRef(new Map<string, TravelItem>());
   const syncTimersRef = useRef(new Map<string, number>());
   const syncInFlightRef = useRef(new Set<string>());
@@ -141,36 +137,13 @@ function Index() {
     }));
   };
 
-  const requestLogin = (reason: string, onAuthenticated?: () => void) => {
-    if (state.auth === "authenticated") {
-      onAuthenticated?.();
-      return;
-    }
-    pendingLoginActionRef.current = onAuthenticated ?? null;
-    setLoginReason(reason);
+  // v1 为免登录模式:协作分享等功能基于邀请码工作,无需账号,直接放行
+  const requestLogin = (_reason: string, onAuthenticated?: () => void) => {
+    onAuthenticated?.();
   };
 
   const handleCompanionFinish = (result: OnboardingResult) => {
-    if (state.auth === "guest") {
-      setPendingCompanion(result);
-      setLoginReason(
-        result.memoryEnabled
-          ? "保存搭子匹配结果，以及你主动授权的偏好测试记忆"
-          : "保存搭子匹配结果",
-      );
-      return;
-    }
     saveCompanion(result);
-  };
-
-  const handleLoginConfirm = () => {
-    setState((current) => ({ ...current, auth: "authenticated" }));
-    if (pendingCompanion) saveCompanion(pendingCompanion);
-    const pendingAction = pendingLoginActionRef.current;
-    pendingLoginActionRef.current = null;
-    setPendingCompanion(null);
-    setLoginReason(null);
-    pendingAction?.();
   };
 
   const createTravel = (travel: TravelItem) => {
@@ -359,29 +332,16 @@ function Index() {
     />
   ) : (
     <MineTab
-      auth={state.auth}
       companion={state.companion}
       travels={state.travels}
       tab={state.tab}
       onTabChange={(tab) => setState((current) => ({ ...current, tab }))}
-      onRequireLogin={requestLogin}
     />
   );
 
   return (
     <div className="relative min-h-dvh bg-background">
       {content}
-      {loginReason && (
-        <LoginDialog
-          reason={loginReason}
-          onCancel={() => {
-            setLoginReason(null);
-            setPendingCompanion(null);
-            pendingLoginActionRef.current = null;
-          }}
-          onConfirm={handleLoginConfirm}
-        />
-      )}
       {syncNotice && (
         <div className="pointer-events-none fixed bottom-20 left-1/2 z-50 w-[82%] max-w-sm -translate-x-1/2 rounded-[13px] bg-foreground/90 px-4 py-2.5 text-center text-[10px] text-background shadow-lg">
           {syncNotice}

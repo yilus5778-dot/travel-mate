@@ -7,7 +7,12 @@
 
 // 仅声明用到的最小 API 面,避免引入完整类型包。
 export type AMapPlaceSearchCallbackResult = {
-  poiList?: { pois?: Array<{ location?: { lng: number; lat: number } | null }> };
+  poiList?: {
+    pois?: Array<{
+      location?: { lng: number; lat: number } | null;
+      photos?: Array<{ url?: string }>;
+    }>;
+  };
 };
 
 export interface AMapMapInstance {
@@ -16,13 +21,35 @@ export interface AMapMapInstance {
   setFitView(overlays?: unknown[] | null): void;
 }
 
+export type AMapGeocoderResult = {
+  geocodes?: Array<{
+    addressComponent?: { province?: string } | string;
+  }>;
+};
+
 export interface AMapNamespace {
   Map: new (container: HTMLElement, options?: Record<string, unknown>) => AMapMapInstance;
-  PlaceSearch: new (options: { city?: string; citylimit?: boolean }) => {
+  PlaceSearch: new (options: {
+    city?: string;
+    citylimit?: boolean;
+    /** "base"(默认)不返回 photos 等扩展字段,取照片必须 "all"。 */
+    extensions?: "base" | "all";
+  }) => {
     search(
       keyword: string,
       callback: (status: string, result: AMapPlaceSearchCallbackResult) => void,
     ): void;
+  };
+  Geocoder: new (options?: Record<string, unknown>) => {
+    getLocation(
+      keyword: string,
+      callback: (status: string, result: AMapGeocoderResult) => void,
+    ): void;
+  };
+  DistrictLayer: {
+    Province: new (options: Record<string, unknown>) => {
+      setMap(map: AMapMapInstance | null): void;
+    };
   };
   Marker: new (options: Record<string, unknown>) => unknown;
   Polyline: new (options: Record<string, unknown>) => unknown;
@@ -69,7 +96,7 @@ export function loadAmap(): Promise<AMapNamespace> {
     const params = new URLSearchParams({
       v: "2.0",
       key,
-      plugin: "AMap.PlaceSearch,AMap.Geocoder",
+      plugin: "AMap.PlaceSearch,AMap.Geocoder,AMap.DistrictLayer",
     });
     script.src = `https://webapi.amap.com/maps?${params.toString()}`;
     script.onload = () => {

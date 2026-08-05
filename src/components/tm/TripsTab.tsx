@@ -49,8 +49,8 @@ import { MiniShell, Card, PrimaryButton, Tag, type TabKey } from "./MiniShell";
 import { CreateTrip } from "./CreateTrip";
 import { AccountingCenter } from "./AccountingCenter";
 import { CollaborationCenter } from "./CollaborationCenter";
-import { TripMap, type TripMapDay } from "./TripMap";
-import { isAmapConfigured } from "@/lib/amap-loader";
+import { DayRouteSketch } from "./DayRouteSketch";
+import { fetchPoiPhoto } from "@/lib/poi-photos";
 
 function valueOrPending(value: string | number | null) {
   return value === null || value === "" ? "待确定" : String(value);
@@ -180,6 +180,21 @@ function StopImageCard({
   compact?: boolean;
 }) {
   const visual = stopVisualMeta(title, destination);
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPhoto(null);
+    if (destination?.trim() && title.trim()) {
+      void fetchPoiPhoto(destination, title).then((url) => {
+        if (!cancelled && url) setPhoto(url);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [destination, title]);
+
   return (
     <div
       role="img"
@@ -188,17 +203,39 @@ function StopImageCard({
         compact ? "mb-2 h-14" : "mb-3 h-24"
       }`}
     >
-      <div className="absolute -right-8 -top-10 size-28 rounded-full bg-card/45" />
-      <div className="absolute -bottom-10 left-8 h-20 w-44 -rotate-6 rounded-full border-[10px] border-card/35" />
-      <div className="absolute left-3 top-2.5 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
-        <Camera className="size-3" />
-        图片
-      </div>
+      {photo ? (
+        <>
+          <img
+            src={photo}
+            alt={title}
+            loading="lazy"
+            className="absolute inset-0 size-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-foreground/45 via-transparent to-transparent" />
+        </>
+      ) : (
+        <>
+          <div className="absolute -right-8 -top-10 size-28 rounded-full bg-card/45" />
+          <div className="absolute -bottom-10 left-8 h-20 w-44 -rotate-6 rounded-full border-[10px] border-card/35" />
+          <div className="absolute left-3 top-2.5 flex items-center gap-1 rounded-full bg-card/70 px-2 py-1 text-[9px] font-medium text-muted-foreground">
+            <Camera className="size-3" />
+            图片
+          </div>
+        </>
+      )}
       <div className="absolute bottom-2.5 left-3 right-3">
-        <p className={compact ? "text-[14px] leading-none" : "text-[18px] leading-none"}>
-          {visual.emoji}
+        {!photo && (
+          <p className={compact ? "text-[14px] leading-none" : "text-[18px] leading-none"}>
+            {visual.emoji}
+          </p>
+        )}
+        <p
+          className={`mt-0.5 truncate text-[11px] font-semibold ${
+            photo ? "text-white drop-shadow" : "text-foreground"
+          }`}
+        >
+          {visual.label}
         </p>
-        <p className="mt-0.5 truncate text-[11px] font-semibold text-foreground">{visual.label}</p>
       </div>
     </div>
   );
@@ -1095,25 +1132,6 @@ function DayPlanEditor({
   const checkItems = dayItems.flatMap((item) =>
     (item.checks ?? []).map((check) => ({ id: `${item.id}-${check}`, title: item.title, check })),
   );
-  const routePositions = [
-    { left: "10%", top: "26%" },
-    { left: "40%", top: "58%" },
-    { left: "70%", top: "24%" },
-    { left: "82%", top: "66%" },
-  ];
-
-  // 真实地图数据:按天分组行程地点(排除搭子加料与待生成占位)。
-  const mapDestination = travel.destination ?? travel.destinationPreference ?? "";
-  const mapDays: TripMapDay[] = (() => {
-    const grouped = new Map<number, string[]>();
-    for (const item of travel.itinerary) {
-      if (item.companionAccent || item.duration === "待生成" || !item.title.trim()) continue;
-      const day = item.day ?? 1;
-      grouped.set(day, [...(grouped.get(day) ?? []), item.title]);
-    }
-    return [...grouped.entries()].sort(([a], [b]) => a - b).map(([day, stops]) => ({ day, stops }));
-  })();
-  const showRealMap = isAmapConfigured() && mapDestination.trim().length > 0;
 
   return (
     <Card className="overflow-hidden !p-0">
@@ -1357,56 +1375,41 @@ function DayPlanEditor({
         </button>
 
         <div className="mt-5">
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-[13px] font-semibold text-foreground">当日路线</p>
               <p className="mt-0.5 text-[9px] text-muted-foreground">
-                地点位置由地图实时搜索确认，不使用编造坐标。
+                相对位置草图 · 连线长度反映景点间距离
               </p>
             </div>
             <Route className="size-4 text-accent" />
           </div>
-          {showRealMap ? (
-            <TripMap destination={mapDestination} days={mapDays} />
-          ) : (
+
+          {/* 轻量路线草图（不依赖实时地图） */}
+          {navigableDayItems.length > 0 && (
+            <DayRouteSketch
+              day={selectedDay}
+              items={travel.itinerary}
+              destination={travel.destination ?? travel.destinationPreference ?? ""}
+            />
+          )}
+
+          {navigableDayItems.length === 0 && (
             <div className="relative h-40 overflow-hidden rounded-[18px] bg-accent-soft">
               <div className="absolute -left-10 top-6 h-16 w-52 rotate-12 rounded-full border-[10px] border-card/75" />
               <div className="absolute -right-14 bottom-2 h-20 w-56 -rotate-12 rounded-full border-[10px] border-brand-soft" />
-              {routeItems.length > 1 && (
-                <>
-                  <div className="absolute left-[15%] top-[39%] h-1 w-[30%] rotate-[24deg] rounded-full bg-accent/35" />
-                  <div className="absolute left-[44%] top-[43%] h-1 w-[30%] -rotate-[28deg] rounded-full bg-accent/35" />
-                  {routeItems.length > 3 && (
-                    <div className="absolute left-[70%] top-[46%] h-1 w-[18%] rotate-[55deg] rounded-full bg-accent/35" />
-                  )}
-                </>
-              )}
-              {routeItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className="absolute -translate-x-1/2 -translate-y-1/2"
-                  style={routePositions[index]}
-                >
-                  <div className="mx-auto flex size-7 items-center justify-center rounded-full border-2 border-card bg-accent text-[10px] font-bold text-accent-foreground shadow-sm">
-                    {index + 1}
-                  </div>
-                  <p className="mt-1 max-w-[88px] truncate rounded-full bg-card/90 px-2 py-1 text-[8px] font-medium text-foreground shadow-sm">
-                    {item.title}
-                  </p>
-                </div>
-              ))}
-              {!routeItems.length && (
-                <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
-                  添加地点后自动形成路线
-                </div>
-              )}
+              <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
+                添加地点后自动形成路线
+              </div>
             </div>
           )}
+
           <p className="mt-2 truncate text-[10px] text-muted-foreground">
             {routeItems.length
               ? routeItems.map((item) => item.title).join(" → ")
               : "当天路线待补充"}
           </p>
+
           <button
             type="button"
             disabled={!firstStop}
